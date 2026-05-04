@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
     allowMixedContent: false
   },
   server: {
-    androidScheme: 'https',
+    androidScheme: 'http',
     cleartext: true,
   }
 };
