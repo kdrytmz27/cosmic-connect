@@ -3,6 +3,9 @@ FROM node:18-slim AS builder
 
 WORKDIR /app
 
+# Install openssl for Prisma engine detection
+RUN apt-get update -y && apt-get install -y openssl
+
 # Install build dependencies completely
 COPY package*.json ./
 COPY tsconfig.json ./
@@ -22,6 +25,9 @@ RUN npm run build
 FROM node:18-slim
 
 WORKDIR /app
+
+# Install openssl for Prisma engine detection
+RUN apt-get update -y && apt-get install -y openssl
 
 # Create non-root user for security (Debian way instead of Alpine)
 RUN groupadd -g 1001 appgroup && useradd -u 1001 -g appgroup -s /bin/sh -m appuser
