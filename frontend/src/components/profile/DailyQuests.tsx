@@ -7,7 +7,7 @@ import { Sparkles, CheckCircle2, Gift } from 'lucide-react';
 
 export const DailyQuests = () => {
     const { showToast } = useToast();
-    const { updateEconomy, stardustBalance } = useAuth();
+    const { updateEconomy } = useAuth();
     const [quests, setQuests] = useState<any>(null);
     const [claiming, setClaiming] = useState(false);
 

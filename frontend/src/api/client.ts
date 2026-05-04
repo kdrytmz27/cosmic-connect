@@ -4,7 +4,6 @@ import { toastManager } from '../context/ToastContext';
 // VITE_API_URL öncelikli: .env dosyasında tanımlı olmalı (özellikle APK build'leri için)
 // Capacitor native ortamında window.location.hostname 'localhost' döner ama
 // bu gerçek localhost değildir — bu yüzden VITE_API_URL zorunludur.
-const isCapacitorNative = window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:';
 
 if (!import.meta.env.VITE_API_URL) {
     console.error('[API] VITE_API_URL tanımlı değil! Capacitor native build\'de backend\'e bağlanılamaz.');

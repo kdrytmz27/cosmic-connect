@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
 import api from '../api/client';
 import { motion } from 'framer-motion';
 import './Auth.css';
@@ -9,7 +8,7 @@ import './Auth.css';
 const Register = () => {
     const [formData, setFormData] = useState({ email: '', password: '', name: '', birthDate: '', birthTime: '', birthCity: '' });
     const { login } = useAuth();
-    const { showToast } = useToast();
+    // Removed unused useToast
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

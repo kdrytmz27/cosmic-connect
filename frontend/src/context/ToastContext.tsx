@@ -17,7 +17,7 @@ interface ToastContextType {
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const toastManager = {
-    showToast: (message: string, type: ToastType = 'info') => {
+    showToast: (message: string, _type: ToastType = 'info') => {
         console.warn('Toast not initialized:', message);
     }
 };

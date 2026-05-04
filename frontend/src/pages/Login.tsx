@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
 import api from '../api/client';
 import { motion } from 'framer-motion';
 import './Auth.css';
@@ -10,7 +9,7 @@ const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const { login } = useAuth();
-    const { showToast } = useToast();
+    // Removed unused useToast
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

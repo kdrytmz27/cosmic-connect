@@ -20,12 +20,9 @@ export const logger = winston.createLogger({
     ],
 });
 
-// Avoid writing to file in development if console is enough, but add console transport
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: combine(
-            colorize(),
-            myFormat
-        )
-    }));
-}
+logger.add(new winston.transports.Console({
+    format: combine(
+        colorize(),
+        myFormat
+    )
+}));

@@ -34,7 +34,7 @@ describe('Market Sayfası Testleri', () => {
             avatar: null,
             login: vi.fn(),
             logout: vi.fn(),
-            updateEconomy: mockUpdateEconomy,
+            updateEconomy: mockUpdateEconomy as any,
             refreshUser: vi.fn()
         });
 

@@ -53,7 +53,9 @@ describe('Mesajlaşma Sayfası Testleri', () => {
 
         vi.spyOn(SocketContextModule, 'useSocket').mockReturnValue({
             socket: mockSocket as any,
-            connected: true
+            isConnected: true,
+            unreadCount: 0,
+            setUnreadCount: vi.fn()
         });
 
         const mockGet = vi.mocked(api.get);
