@@ -33,6 +33,7 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules/.prisma/client ./node_modules/.prisma/client
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chown -R appuser:appgroup /app
