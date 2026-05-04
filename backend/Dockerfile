@@ -32,8 +32,9 @@ RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=builder /app/node_modules/.prisma/client ./node_modules/.prisma/client
+
+# Directly generate the prisma client natively in production stage to guarantee matching binaries
+RUN npx prisma generate
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chown -R appuser:appgroup /app
