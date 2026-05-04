@@ -27,11 +27,13 @@ import { logger } from './utils/logger';
 
 // --- SAFETY NETS (Yakalanmayan Hatalar) ---
 process.on('uncaughtException', (err: any) => {
+    console.error(`[UNCAUGHT EXCEPTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, err.stack);
     logger.error(`[UNCAUGHT EXCEPTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, { stack: err.stack });
     process.exit(1);
 });
 
 process.on('unhandledRejection', (err: any) => {
+    console.error(`[UNHANDLED REJECTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, err.stack);
     logger.error(`[UNHANDLED REJECTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, { stack: err.stack });
     process.exit(1);
 });
