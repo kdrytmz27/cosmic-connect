@@ -1,5 +1,5 @@
 # Base image
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /app
 
@@ -19,12 +19,12 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production image
-FROM node:18-alpine
+FROM node:18-slim
 
 WORKDIR /app
 
-# Create non-root user for security (prevents container escape privilege escalation)
-RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001 -G appgroup
+# Create non-root user for security (Debian way instead of Alpine)
+RUN groupadd -g 1001 appgroup && useradd -u 1001 -g appgroup -s /bin/sh -m appuser
 
 # Copy built files and production dependencies only
 COPY package*.json ./
@@ -32,9 +32,8 @@ RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-
-# Directly generate the prisma client natively in production stage to guarantee matching binaries
-RUN npx prisma generate
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules/.prisma/client ./node_modules/.prisma/client
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chown -R appuser:appgroup /app
