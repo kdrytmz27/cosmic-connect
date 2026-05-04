@@ -1,0 +1,174 @@
+import { logger } from '../utils/logger';
+import { UserRole } from '../enums/UserRole';
+
+// FEAT-05: Zodiac compatibility scoring for matchmaking
+const FIRE = ['Aries', 'Leo', 'Sagittarius'];
+const EARTH = ['Taurus', 'Virgo', 'Capricorn'];
+const AIR = ['Gemini', 'Libra', 'Aquarius'];
+const WATER = ['Cancer', 'Scorpio', 'Pisces'];
+
+function getElement(sign: string | null | undefined): string | null {
+    if (!sign) return null;
+    if (FIRE.includes(sign)) return 'FIRE';
+    if (EARTH.includes(sign)) return 'EARTH';
+    if (AIR.includes(sign)) return 'AIR';
+    if (WATER.includes(sign)) return 'WATER';
+    return null;
+}
+
+// Returns 0 (neutral), 20 (compatible), or 30 (highly compatible) bonus points
+function getZodiacCompatBonus(sign1: string | null | undefined, sign2: string | null | undefined): number {
+    const e1 = getElement(sign1);
+    const e2 = getElement(sign2);
+    if (!e1 || !e2) return 0;
+    if (e1 === e2) return 20; // Same element: very compatible
+    // Fire <-> Air and Water <-> Earth are complementary
+    if ((e1 === 'FIRE' && e2 === 'AIR') || (e1 === 'AIR' && e2 === 'FIRE')) return 30;
+    if ((e1 === 'WATER' && e2 === 'EARTH') || (e1 === 'EARTH' && e2 === 'WATER')) return 30;
+    return 0; // Incompatible: neutral, use default threshold
+}
+
+export interface QueuedPlayer {
+    userId: string;
+    socketId: string;
+    matchScore: number;
+    isPremium: boolean;
+    karma: number;
+}
+
+const queue: QueuedPlayer[] = [];
+const rooms = new Map<string, any>();
+
+export const matchmakingService = {
+    async joinQueue(player: QueuedPlayer) {
+        // Remove existing entry for this user (prevent duplicates)
+        const existingIdx = queue.findIndex(p => p.userId === player.userId);
+        if (existingIdx !== -1) {
+            queue.splice(existingIdx, 1);
+        }
+
+        // Additional safety check: Ensure user is not a teller
+        const { prisma } = await import('../index');
+        const user = await prisma.user.findUnique({ where: { id: player.userId } });
+        if (user?.role === UserRole.FORTUNE_TELLER) {
+            logger.debug(`[Matchmaking] User ${player.userId} is a teller. Rejecting queue entry.`);
+            return;
+        }
+
+        queue.push(player);
+        logger.debug(`[Matchmaking] User ${player.userId} joined queue. Queue size: ${queue.length}`);
+    },
+
+    removeFromQueue(userId: string) {
+        const idx = queue.findIndex(p => p.userId === userId);
+        if (idx !== -1) {
+            queue.splice(idx, 1);
+            logger.debug(`[Matchmaking] User ${userId} removed from queue. Queue size: ${queue.length}`);
+        }
+    },
+
+    async tryMatch(): Promise<[QueuedPlayer, QueuedPlayer] | null> {
+        logger.debug(`[Matchmaking] tryMatch called. Queue size: ${queue.length}`, { queue: queue.map(p => ({ userId: p.userId, score: p.matchScore })) });
+        if (queue.length >= 2) {
+            const { prisma } = await import('../index');
+            for (let i = 0; i < queue.length; i++) {
+                for (let j = i + 1; j < queue.length; j++) {
+                    const p1 = queue[i];
+                    const p2 = queue[j];
+                    if (!p1 || !p2) continue;
+
+                    const scoreDiff = Math.abs(p1.matchScore - p2.matchScore);
+
+                    // Fetch signs for compatibility bonus
+                    const [u1, u2] = await Promise.all([
+                        prisma.user.findUnique({ where: { id: p1.userId }, select: { sunSign: true, karma: true } }),
+                        prisma.user.findUnique({ where: { id: p2.userId }, select: { sunSign: true, karma: true } })
+                    ]);
+                    const compatBonus = getZodiacCompatBonus(u1?.sunSign, u2?.sunSign);
+
+                    // FEAT-13: Karma-based threshold bonus
+                    // Both players above 120 karma → extra +15 threshold (easier to match)
+                    // One player below 50 karma → -10 threshold (harder to match with clean players)
+                    const k1 = u1?.karma ?? 100;
+                    const k2 = u2?.karma ?? 100;
+                    let karmaBonus = 0;
+                    if (k1 >= 120 && k2 >= 120) karmaBonus = 15;
+                    else if (k1 < 50 || k2 < 50) karmaBonus = -10;
+
+                    const effectiveThreshold = 20 + compatBonus + karmaBonus;
+
+                    logger.debug(`[Matchmaking] Comparing ${p1.userId} (score:${p1.matchScore}) vs ${p2.userId} (score:${p2.matchScore}) diff:${scoreDiff} threshold:${effectiveThreshold}`);
+                    if (scoreDiff <= effectiveThreshold) {
+                        // Check if these two users already have a relationship (friend, match, or swipe match)
+                        const existingRelation = await prisma.friendship.findFirst({
+                            where: {
+                                OR: [
+                                    { user1Id: p1.userId, user2Id: p2.userId },
+                                    { user1Id: p2.userId, user2Id: p1.userId }
+                                ]
+                            }
+                        });
+
+                        if (existingRelation) {
+                            logger.debug(`[Matchmaking] SKIP: ${p1.userId} <-> ${p2.userId} already have relationship (${existingRelation.status})`);
+                            continue; // Skip this pair, try others
+                        }
+
+                        queue.splice(j, 1);
+                        queue.splice(i, 1);
+                        logger.info(`[Matchmaking] MATCH FOUND! ${p1.userId} <-> ${p2.userId} (compat bonus: ${compatBonus})`);
+                        return [p1, p2];
+                    }
+                }
+            }
+            // If queue length is large but no strict matches, could relax constraint here
+        }
+        return null;
+    },
+
+    async createRoom(p1: QueuedPlayer, p2: QueuedPlayer, timeoutCallback: (roomId: string) => void): Promise<{ roomId: string, duration: number }> {
+        const roomId = `room_${Date.now()}_${p1.userId}_${p2.userId}`;
+
+        const isPremiumMatch = p1.isPremium || p2.isPremium;
+        const duration = isPremiumMatch ? 320000 : 160000;
+        const expiresAt = Date.now() + duration;
+        const timeoutId = setTimeout(() => timeoutCallback(roomId), duration);
+
+        rooms.set(`room:${roomId}`, {
+            p1: p1.userId,
+            p2: p2.userId,
+            createdAt: Date.now(),
+            expiresAt,
+            timeoutId,
+            extraTimeRequests: new Set<string>(),
+            timeoutCallback
+        });
+
+        return { roomId, duration };
+    },
+
+    getRoom(roomId: string) {
+        return rooms.get(`room:${roomId}`);
+    },
+
+    extendRoomTime(roomId: string, extraMs: number) {
+        const room = rooms.get(`room:${roomId}`);
+        if (!room) return false;
+
+        const now = Date.now();
+        const currentRemaining = Math.max(0, room.expiresAt - now);
+        const newRemaining = currentRemaining + extraMs;
+        room.expiresAt = now + newRemaining;
+
+        clearTimeout(room.timeoutId);
+        room.timeoutId = setTimeout(() => room.timeoutCallback(roomId), newRemaining);
+        room.extraTimeRequests.clear();
+        return true;
+    },
+
+    async removeRoom(roomId: string) {
+        const room = rooms.get(`room:${roomId}`);
+        if (room && room.timeoutId) clearTimeout(room.timeoutId);
+        rooms.delete(`room:${roomId}`);
+    }
+};

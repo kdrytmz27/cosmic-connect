@@ -1,0 +1,47 @@
+export declare const xpService: {
+    addXp: (userId: string, amount: number) => Promise<{
+        role: string;
+        email: string;
+        birthDate: Date;
+        birthTime: string;
+        latitude: number;
+        longitude: number;
+        id: string;
+        passwordHash: string;
+        name: string | null;
+        bio: string | null;
+        avatar: string | null;
+        hobby: string | null;
+        music: string | null;
+        weekend: string | null;
+        lookingForHobby: string | null;
+        lookingForMusic: string | null;
+        lookingForWeekend: string | null;
+        gender: string | null;
+        interestedIn: string | null;
+        sunSign: string;
+        moonSign: string;
+        risingSign: string;
+        stardustBalance: number;
+        matchScore: number;
+        cosmicStatus: string | null;
+        isPremium: boolean;
+        dailySwipes: number;
+        lastSwipeDate: Date | null;
+        superLikesLeft: number;
+        extraTimeLeft: number;
+        twoFactorSecret: string | null;
+        isTwoFactorEnabled: boolean;
+        dailyMatchPasses: number;
+        lastDailyReward: Date | null;
+        loginStreak: number;
+        xp: number;
+        level: number;
+        lastDailyTarot: Date | null;
+        badges: string;
+        createdAt: Date;
+        dailyFriendRequests: number;
+        lastFriendRequestDate: Date | null;
+    } | null>;
+};
+//# sourceMappingURL=xp.service.d.ts.map

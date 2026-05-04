@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String
+  name              String?
+  bio               String?
+  avatar            String?
+  hobby             String?
+  music             String?
+  weekend           String?
+  lookingForHobby   String?
+  lookingForMusic   String?
+  lookingForWeekend String?
+  gender            String?  @default("MALE")
+  interestedIn      String?  @default("FEMALE")
+  role              String   @default("STANDARD")
+  birthDate         DateTime
+  birthTime         String
+  latitude          Float
+  longitude         Float
+  sunSign           String
+  moonSign          String
+  risingSign        String
+  stardustBalance   Int      @default(0)
+  matchScore        Int      @default(100)
+  cosmicStatus      String?
+
+  // Premium & Economy Fields
+  isPremium       Boolean   @default(false)
+  dailySwipes     Int       @default(0)
+  lastSwipeDate   DateTime?
+  
+  // Online Status
+  isOnline        Boolean   @default(false)
+  lastSeen        DateTime?
+  superLikesLeft  Int       @default(0)
+  extraTimeLeft   Int       @default(0)
+
+  // Security Fields
+  twoFactorSecret    String?
+  isTwoFactorEnabled Boolean   @default(false)
+  dailyMatchPasses Int      @default(50)
+  lastDailyReward DateTime?
+  loginStreak     Int       @default(0)
+  xp              Int       @default(0)
+  level           Int       @default(1)
+  lastDailyTarot  DateTime?
+  badges          String    @default("[]")
+
+  // Push Notifications (FEAT-06) — stores Expo/Capacitor push token
+  pushToken String?
+
+  // Daily Quests (FEAT-08)
+  dailyQuestMatches  Int       @default(0)
+  dailyQuestMessages Int       @default(0)
+  dailyQuestClaimed  Boolean   @default(false)
+  lastQuestReset     DateTime?
+
+  // Cosmic Karma (FEAT-10)
+  karma              Int       @default(100)
+
+  createdAt DateTime @default(now())
+
+  sentMessages         Message[]      @relation("SentMessages")
+  receivedMessages     Message[]      @relation("ReceivedMessages")
+  friendshipsUser1     Friendship[]   @relation("FriendshipUser1")
+  friendshipsUser2     Friendship[]   @relation("FriendshipUser2")
+  groupMessages        GroupMessage[] @relation("GroupSender")
+  sentGifts            Gift[]         @relation("SentGifts")
+  receivedGifts        Gift[]         @relation("ReceivedGifts")
+  photos               Photo[]
+  fortuneTellerProfile FortuneTeller?
+  appointments         Appointment[]
+  tellerComments       TellerComment[]
+  tellerApplication    TellerApplication?
+  sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
+
+  dailyFriendRequests  Int       @default(0)
+  lastFriendRequestDate DateTime?
+
+  sentReports        Report[] @relation("ReportedBy")
+  receivedReports    Report[] @relation("ReportedUser")
+  notifications      Notification[]
+  blockedUsers       BlockedUser[] @relation("BlockerUser")
+  blockedBy          BlockedUser[] @relation("BlockedUserRel")
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // "MESSAGE", "FRIEND_REQUEST", "MATCH", "GIFT", "SYSTEM" vs.
+  title       String
+  content     String
+  isRead      Boolean  @default(false)
+  actionUrl   String?  // Bildirime tıklandığında gidilecek URL (örn. "/messages" veya "/profile/id")
+  entityId    String?  // İlgili datanın ID'si (örn. mesaj ID veya friend request ID)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model GroupMessage {
+  id        String   @id @default(cuid())
+  roomId    String   // Zodiac sign name e.g., 'Aries'
+  senderId  String
+  sender    User     @relation("GroupSender", fields: [senderId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([roomId])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  user1Id   String
+  user2Id   String
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  status    String   @default("FRIEND") // Can be "MATCH" or "FRIEND"
+
+  user1 User @relation("FriendshipUser1", fields: [user1Id], references: [id])
+  user2 User @relation("FriendshipUser2", fields: [user2Id], references: [id])
+
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([user1Id, user2Id])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, senderId])
+  @@index([createdAt])
+}
+
+model FortuneTeller {
+  id           String @id @default(uuid())
+  userId       String @unique
+  skills       String
+  bio          String
+  rating       Float  @default(0)
+  reviewCount  Int    @default(0)
+  fortuneTypes String @default("TAROT,KAHVE,EL")
+
+  user         User            @relation(fields: [userId], references: [id])
+  appointments Appointment[]
+  comments     TellerComment[]
+}
+
+model Appointment {
+  id              String   @id @default(uuid())
+  tellerId        String
+  userId          String
+  appointmentDate DateTime
+  status          String   @default("PENDING")
+  stardustPrice   Int
+  fortuneType     String?  @default("TAROT")
+  question        String?
+  imageUrl        String?
+  interpretation  String?
+  userRating      Int?
+
+  teller FortuneTeller @relation(fields: [tellerId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tellerId])
+  @@index([status])
+}
+
+model HoroscopeTemplate {
+  id       Int    @id @default(autoincrement())
+  sign     String
+  category String
+  content  String
+
+  @@index([sign, category])
+}
+
+model TellerComment {
+  id        String   @id @default(uuid())
+  tellerId  String
+  userId    String
+  comment   String
+  createdAt DateTime @default(now())
+
+  teller FortuneTeller @relation(fields: [tellerId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@index([tellerId])
+  @@index([userId])
+}
+
+model Photo {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model TellerApplication {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  experience   String // How long they have been reading, background
+  fortuneTypes String // Comma separated codes
+  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Gift {
+  id           String   @id @default(uuid())
+  senderId     String
+  receiverId   String
+  giftType     String
+  stardustCost Int
+  createdAt    DateTime @default(now())
+
+  sender   User @relation("SentGifts", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedGifts", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model FriendRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentFriendRequests", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedFriendRequests", fields: [receiverId], references: [id])
+
+  @@index([senderId, status])
+  @@index([receiverId, status])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  reporterId  String
+  reportedId  String
+  reason      String
+  description String?
+  status      String   @default("PENDING") // PENDING, RESOLVED, DISMISSED
+  createdAt   DateTime @default(now())
+
+  reporter    User @relation("ReportedBy", fields: [reporterId], references: [id])
+  reported    User @relation("ReportedUser", fields: [reportedId], references: [id])
+
+  @@index([reporterId])
+  @@index([reportedId])
+  @@index([status])
+}
+model BlockedUser {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlockerUser", fields: [blockerId], references: [id])
+  blocked User @relation("BlockedUserRel", fields: [blockedId], references: [id])
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}

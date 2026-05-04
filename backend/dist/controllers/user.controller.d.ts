@@ -1,0 +1,26 @@
+import { Request, Response } from 'express';
+export declare const getProfile: (req: Request, res: Response) => Promise<void>;
+export declare const updateProfile: (req: Request, res: Response) => Promise<void>;
+export declare const getDailyMatch: (req: Request, res: Response) => Promise<void>;
+export declare const getLeaderboard: (req: Request, res: Response) => Promise<void>;
+export declare const getDailyRewardStatus: (req: Request, res: Response) => Promise<void>;
+export declare const claimDailyReward: (req: Request, res: Response) => Promise<void>;
+export declare const updateCosmicStatus: (req: Request, res: Response) => Promise<void>;
+export declare const applyPenalty: (req: Request, res: Response) => Promise<void>;
+export declare const reportUser: (req: Request, res: Response) => Promise<void>;
+export declare const getSynastry: (req: Request, res: Response) => Promise<void>;
+export declare const addFriend: (req: Request, res: Response) => Promise<void>;
+export declare const getFriends: (req: Request, res: Response) => Promise<void>;
+export declare const deleteFriend: (req: Request, res: Response) => Promise<void>;
+export declare const acceptMatch: (req: Request, res: Response) => Promise<void>;
+export declare const passMatch: (req: Request, res: Response) => Promise<void>;
+export declare const extendMatch: (req: Request, res: Response) => Promise<void>;
+export declare const makeMatchPermanent: (req: Request, res: Response) => Promise<void>;
+export declare const sendFriendRequest: (req: Request, res: Response) => Promise<void>;
+export declare const acceptFriendRequest: (req: Request, res: Response) => Promise<void>;
+export declare const rejectFriendRequest: (req: Request, res: Response) => Promise<void>;
+export declare const getPendingRequests: (req: Request, res: Response) => Promise<void>;
+export declare const getFriendRequestStatus: (req: Request, res: Response) => Promise<void>;
+export declare const getMessages: (req: Request, res: Response) => Promise<void>;
+export declare const sendMessage: (req: Request, res: Response) => Promise<void>;
+//# sourceMappingURL=user.controller.d.ts.map
