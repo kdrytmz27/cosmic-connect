@@ -82,16 +82,14 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                                     }
                                 }}
                                 style={{
-                                    background: isError ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(0,0,0,0.8))' :
-                                        isSuccess ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(0,0,0,0.8))' :
-                                            'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(0,0,0,0.8))',
+                                    background: isError ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(10,5,20,0.9))' :
+                                        isSuccess ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(10,5,20,0.9))' :
+                                            'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(10,5,20,0.9))',
                                     color: 'white',
                                     padding: '12px 16px',
                                     borderRadius: 16,
                                     fontSize: 14,
                                     fontWeight: '500',
-                                    backdropFilter: 'blur(16px)',
-                                    WebkitBackdropFilter: 'blur(16px)',
                                     border: `1px solid ${isError ? 'rgba(239,68,68,0.3)' :
                                         isSuccess ? 'rgba(34,197,94,0.3)' :
                                             'rgba(139, 92, 246, 0.3)'

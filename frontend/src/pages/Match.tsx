@@ -152,7 +152,7 @@ const Match = () => {
             {matchState === 'pending' && matchedUser && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(10, 5, 20, 0.85)', backdropFilter: 'blur(10px)',
+                    background: 'rgba(10, 5, 20, 0.92)',
                     zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
                 }}>
                     <motion.div

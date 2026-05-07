@@ -290,7 +290,7 @@ const Home = () => {
                                             position: 'absolute', top: 8, right: 8,
                                             background: 'rgba(0,0,0,0.6)', color: 'var(--accent-gold)',
                                             padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 'bold',
-                                            border: '1px solid rgba(255,215,0,0.3)', backdropFilter: 'blur(4px)'
+                                            border: '1px solid rgba(255,215,0,0.3)'
                                         }}>
                                             %{item.score}
                                         </div>

@@ -192,7 +192,7 @@ const TellerProfile = () => {
 
             {/* Fortune Request Modal */}
             {showFortuneModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', padding: 16, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', padding: 16, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="glass-panel" style={{ padding: 24, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid rgba(139,92,246,0.3)', boxShadow: '0 0 40px rgba(139,92,246,0.15)' }}>
                         <h2 style={{ fontSize: 22, fontWeight: 'bold', color: 'white', marginBottom: 20, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                             <Sparkles color="var(--accent-gold)" /> Fal İsteği Gönder

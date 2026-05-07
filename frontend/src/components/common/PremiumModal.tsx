@@ -28,7 +28,7 @@ export const PremiumModal: React.FC<PremiumModalProps> = ({
                     onClick={onClose}
                     style={{
                         position: 'fixed', inset: 0,
-                        background: 'rgba(10, 5, 20, 0.85)', backdropFilter: 'blur(12px)',
+                        background: 'rgba(10, 5, 20, 0.92)',
                         zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24
                     }}
                 >

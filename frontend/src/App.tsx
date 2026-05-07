@@ -8,7 +8,6 @@ import { ToastProvider } from './context/ToastContext';
 import { PageTransition } from './components/PageTransition';
 import { BrandLoader } from './components/BrandLoader';
 import Layout from './components/Layout';
-import { CosmicBackground } from './components/CosmicBackground';
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'));
@@ -131,7 +130,6 @@ function App() {
     <HashRouter>
       <ToastProvider>
         <AuthProvider>
-          <CosmicBackground />
           <AnimatedRoutes />
         </AuthProvider>
       </ToastProvider>

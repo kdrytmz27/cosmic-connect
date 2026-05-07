@@ -80,7 +80,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = 32, text 
         return (
             <div style={{
                 position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(10, 5, 20, 0.8)', backdropFilter: 'blur(10px)', zIndex: 9999
+                background: 'rgba(10, 5, 20, 0.9)', zIndex: 9999
             }}>
                 {content}
             </div>

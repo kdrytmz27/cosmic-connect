@@ -55,9 +55,7 @@
     position: absolute;
     top: 10px;
     right: 10px;
-    background: rgba(11, 11, 15, 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(11, 11, 15, 0.85);
     padding: 4px 8px;
     border-radius: 12px;
     display: flex;
