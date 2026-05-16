@@ -39,7 +39,7 @@ const Match = () => {
                     const res = await api.get(`/user/profile/${otherId}`);
                     // Always preserve the id so handleAcceptMatch can proceed
                     const profileData = res.data.profile || {};
-                    setMatchedUser({ id: otherId, name: 'Gizemli Yabancı', ...profileData, id: otherId });
+                    setMatchedUser({ name: 'Gizemli Yabancı', ...profileData, id: otherId });
                 } catch (e) {
                     // Even on error, keep the id so accept can work
                     setMatchedUser({ id: otherId, name: 'Gizemli Yabancı' });
