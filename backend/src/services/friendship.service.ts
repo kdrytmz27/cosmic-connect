@@ -198,49 +198,36 @@ export const friendshipService = {
     },
 
     acceptMatch: async (userId: string, targetId: string) => {
-        const recentThreshold = new Date(Date.now() - 30 * 1000);
-        const recentRecord = await prisma.friendship.findFirst({
-            where: {
-                OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }],
-                expiresAt: { gt: new Date() },
-                createdAt: { gt: recentThreshold }
-            }
-        });
-
-        if (recentRecord) {
-            const existingAB = await prisma.friendship.findFirst({ where: { user1Id: userId, user2Id: targetId } });
-            const existingBA = await prisma.friendship.findFirst({ where: { user1Id: targetId, user2Id: userId } });
-            if (!existingAB) await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt: recentRecord.expiresAt!, status: 'MATCH' as any } });
-            if (!existingBA) await prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt: recentRecord.expiresAt!, status: 'MATCH' as any } });
-            return { success: true, expiresAt: recentRecord.expiresAt!.toISOString(), serverTime: Date.now() };
-        }
-
-        // FIX #35: Verify if they actually matched before! Prevent "Forced Match / Infinite Karma"
+        // Find any existing relationship (SWIPE_MATCH created by socket matchmaking, or prior friendship)
         const existingRelation = await prisma.friendship.findFirst({
             where: {
                 OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }]
             }
         });
+
+        // If already a valid active MATCH, return success immediately (idempotent)
+        if (existingRelation?.status === 'MATCH' && existingRelation?.expiresAt && new Date() < existingRelation.expiresAt) {
+            return { success: true, expiresAt: existingRelation.expiresAt.toISOString(), serverTime: Date.now() };
+        }
+
+        // Security: must have a prior relation (SWIPE_MATCH from socket matchmaking OR existing friendship)
         if (!existingRelation) {
             throw new Error('Geçersiz İşlem: Eşleşme olmadan zorla kabul sağlanamaz (Force Match Kalkanı).');
         }
 
+        // Delete old records, create fresh bidirectional MATCH
         await prisma.friendship.deleteMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
 
         const expiresAt = new Date(Date.now() + CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
-        // VULN 73 FIX: Removed duplicate friendship create (was creating user1Id+user2Id twice)
         await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' as any } });
         await prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' as any } });
 
-        // FEAT-08: Increment daily quest matches for the user accepting & FEAT-10: Karma
+        // FEAT-08: Increment daily quest matches & FEAT-10: Karma reward
         await prisma.user.updateMany({
             where: { id: userId },
-            data: {
-                dailyQuestMatches: { increment: 1 },
-                karma: { increment: 5 }
-            }
+            data: { dailyQuestMatches: { increment: 1 }, karma: { increment: 5 } }
         });
 
         return { success: true, expiresAt: expiresAt.toISOString(), serverTime: Date.now() };

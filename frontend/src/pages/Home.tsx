@@ -182,85 +182,103 @@ const Home = () => {
                     <p style={{ color: 'var(--text-secondary)' }}>Filtrelerine uygun ruh eşi bulunamadı.</p>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                     <AnimatePresence>
-                        {matches.map((item) => {
-                            const userName = item.match.name || item.match.email.split('@')[0];
-                            const avatar = item.match.avatar ? `${BACKEND_URL}${item.match.avatar}` : `https://ui-avatars.com/api/?name=${userName}&background=random`;
+                        {matches.map((item, index) => {
+                            const userName = item.match.name || item.match.email?.split('@')[0] || 'Kozmik Yabancı';
+                            const avatar = item.match.avatar ? `${BACKEND_URL}${item.match.avatar}` : `https://ui-avatars.com/api/?name=${userName}&background=6d28d9&color=fff&bold=true`;
+                            const score = item.score || 0;
+                            const scoreColor = score >= 80 ? '#34d399' : score >= 60 ? 'var(--accent-gold)' : '#a855f7';
                             return (
                                 <motion.div
                                     key={item.match.id}
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
-                                    transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                                    className="glass-panel"
+                                    transition={{ type: 'spring', stiffness: 280, damping: 22, delay: index * 0.04 }}
                                     style={{
-                                        padding: 0, overflow: 'hidden', cursor: 'pointer',
-                                        border: '1px solid rgba(255, 215, 0, 0.15)', borderRadius: 16,
-                                        background: 'linear-gradient(180deg, rgba(30, 20, 45, 0.9) 0%, rgba(20, 10, 30, 0.95) 100%)',
+                                        borderRadius: 18, overflow: 'hidden', cursor: 'pointer', position: 'relative',
+                                        border: `1px solid rgba(139, 92, 246, 0.2)`,
+                                        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                                        background: 'rgba(15, 8, 30, 0.9)',
                                     }}
                                     onClick={() => setSelectedUser(item)}
                                 >
-                                    {/* Avatar */}
+                                    {/* Fotoğraf */}
                                     <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', overflow: 'hidden' }}>
                                         <img
                                             src={avatar}
                                             alt={userName}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                            loading="lazy"
                                         />
-                                        {/* Uyum Skoru */}
+                                        {/* Üst gradient */}
                                         <div style={{
-                                            position: 'absolute', top: 8, right: 8,
-                                            background: 'rgba(0,0,0,0.6)', color: 'var(--accent-gold)',
-                                            padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 'bold',
-                                            border: '1px solid rgba(255,215,0,0.3)'
-                                        }}>
-                                            %{item.score}
-                                        </div>
-                                        {/* Alt Gradyan */}
+                                            position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
+                                            background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)'
+                                        }} />
+                                        {/* Alt gradient (bilgi alanı) */}
                                         <div style={{
                                             position: 'absolute', bottom: 0, left: 0, right: 0,
-                                            background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)',
-                                            padding: '24px 10px 10px', textAlign: 'left'
+                                            background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)',
+                                            padding: '32px 10px 10px',
                                         }}>
-                                            <h3 style={{ fontSize: 15, fontWeight: 'bold', color: 'white', textTransform: 'capitalize', margin: 0, lineHeight: 1.2 }}>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'white', textTransform: 'capitalize', lineHeight: 1.2 }}>
                                                 {userName}
-                                            </h3>
-                                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
-                                                {item.match.sunSign} • {item.match.gender === 'MALE' ? 'Erkek' : item.match.gender === 'FEMALE' ? 'Kadın' : 'Diğer'}
+                                            </div>
+                                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+                                                {item.match.sunSign}
                                             </div>
                                         </div>
-                                    </div>
-
-                                    {/* Alt Aksiyon Butonları */}
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: 24, padding: '12px 4px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <motion.button
-                                            whileHover={{ scale: 1.1, rotate: 15 }}
-                                            whileTap={{ scale: 0.9 }}
-                                            onClick={(e) => { e.stopPropagation(); sendSuperLike(item.match.id); }}
-                                            disabled={actionLoading}
-                                            title="Süper Beğeni"
-                                            style={{ background: 'rgba(255, 215, 0, 0.15)', border: '1px solid var(--accent-gold)', borderRadius: '50%', color: 'var(--accent-gold)', cursor: 'pointer', padding: 10 }}
-                                        >
-                                            <Sparkles size={20} />
-                                        </motion.button>
-                                        <motion.button
-                                            whileHover={{ scale: 1.1 }}
-                                            whileTap={{ scale: 0.9 }}
-                                            onClick={(e) => { e.stopPropagation(); handleSendFriendRequest(item.match.id); }}
-                                            disabled={actionLoading}
-                                            title="Arkadaş Ekle"
-                                            style={{ background: 'rgba(52, 211, 153, 0.15)', border: '1px solid #34d399', borderRadius: '50%', color: '#34d399', cursor: 'pointer', padding: 10 }}
-                                        >
-                                            <UserPlus size={20} />
-                                        </motion.button>
+                                        {/* Uyum Skoru badge */}
+                                        <div style={{
+                                            position: 'absolute', top: 8, left: 8,
+                                            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+                                            color: scoreColor, padding: '3px 7px', borderRadius: 10,
+                                            fontSize: 10, fontWeight: 800,
+                                            border: `1px solid ${scoreColor}44`,
+                                        }}>
+                                            %{score}
+                                        </div>
+                                        {/* Aksiyon butonları */}
+                                        <div style={{
+                                            position: 'absolute', top: 8, right: 8,
+                                            display: 'flex', flexDirection: 'column', gap: 6
+                                        }}>
+                                            <motion.button
+                                                whileTap={{ scale: 0.85 }}
+                                                onClick={(e) => { e.stopPropagation(); sendSuperLike(item.match.id); }}
+                                                disabled={actionLoading}
+                                                style={{
+                                                    background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+                                                    border: '1px solid rgba(255,215,0,0.4)', borderRadius: '50%',
+                                                    color: 'var(--accent-gold)', cursor: 'pointer', padding: 7,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                }}
+                                            >
+                                                <Sparkles size={14} />
+                                            </motion.button>
+                                            <motion.button
+                                                whileTap={{ scale: 0.85 }}
+                                                onClick={(e) => { e.stopPropagation(); handleSendFriendRequest(item.match.id); }}
+                                                disabled={actionLoading}
+                                                style={{
+                                                    background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+                                                    border: '1px solid rgba(52,211,153,0.4)', borderRadius: '50%',
+                                                    color: '#34d399', cursor: 'pointer', padding: 7,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                }}
+                                            >
+                                                <UserPlus size={14} />
+                                            </motion.button>
+                                        </div>
                                     </div>
                                 </motion.div>
                             );
                         })}
                     </AnimatePresence>
                 </div>
+
             )}
 
             <div ref={loadMoreAnchorRef} />
