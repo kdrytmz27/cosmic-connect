@@ -43,16 +43,10 @@ export class UserService {
             delete (targetUser.fortuneTellerProfile as any).appointments;
         }
 
-        if (currentUserId !== targetUserId) {
-            // VULN 70 FIX: Remove sensitive PII from other users' profiles
-            (targetUser as any).stardustBalance = undefined;
-            (targetUser as any).matchScore = undefined;
-            (targetUser as any).email = undefined;       // email is PII - never expose to other users
-            (targetUser as any).birthDate = undefined;    // exact birthDate is sensitive PII
-            (targetUser as any).birthTime = undefined;    // birthTime is PII
-            (targetUser as any).latitude = undefined;     // exact GPS coordinates are PII
-            (targetUser as any).longitude = undefined;    // exact GPS coordinates are PII
-        }
+        // IMPORTANT: Synastry must be calculated BEFORE PII fields are wiped
+        // Save raw birth fields for synastry calculation
+        const rawBirthDate = targetUser.birthDate;
+        const rawBirthTime = targetUser.birthTime;
 
         const dateStr: string = new Date().toISOString().split('T')[0] ?? '2026-01-01';
         const sign = targetUser.sunSign ?? 'Aries';
@@ -69,14 +63,25 @@ export class UserService {
         if (currentUserId && currentUserId !== targetUserId) {
             const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
             if (currentUser) {
+                // Use raw (pre-PII-wipe) birth fields for accurate synastry
                 const compatibility = calculateQuickSynastryScore(
                     { birthDate: currentUser.birthDate, birthTime: currentUser.birthTime },
-                    { birthDate: targetUser.birthDate, birthTime: targetUser.birthTime }
+                    { birthDate: rawBirthDate, birthTime: rawBirthTime }
                 );
                 const matchHighlights: string[] = [];
                 if (currentUser.lookingForHobby && currentUser.lookingForHobby === targetUser.hobby) matchHighlights.push(`Aradığın Hobi: ${targetUser.hobby}`);
                 if (currentUser.lookingForMusic && currentUser.lookingForMusic === targetUser.music) matchHighlights.push(`Aradığın Müzik: ${targetUser.music}`);
                 if (currentUser.lookingForWeekend && currentUser.lookingForWeekend === targetUser.weekend) matchHighlights.push(`Aradığın Hafta Sonu: ${targetUser.weekend}`);
+
+                // VULN 70 FIX: Now safe to wipe PII - synastry already computed above
+                (targetUser as any).stardustBalance = undefined;
+                (targetUser as any).matchScore = undefined;
+                (targetUser as any).email = undefined;
+                (targetUser as any).birthDate = undefined;
+                (targetUser as any).birthTime = undefined;
+                (targetUser as any).latitude = undefined;
+                (targetUser as any).longitude = undefined;
+
                 return { profile: targetUser, compatibility, matchHighlights, dailyHoroscope };
             }
         }

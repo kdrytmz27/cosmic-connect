@@ -168,37 +168,39 @@ export const MatchDetailModal = ({
                     </div>
                 )}
 
-                <button
-                    onClick={() => handleSendFriendRequest(selectedUser.match.id)}
-                    disabled={actionLoading}
-                    style={{
-                        width: '100%', padding: '12px 20px', borderRadius: 14, marginBottom: 12,
-                        background: 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(14,165,233,0.15))',
-                        border: '1px solid rgba(56,189,248,0.25)',
-                        color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 14,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <UserPlus size={16} color="#38bdf8" />
-                    Arkadaşlık İsteği Gönder
-                </button>
+                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                    <button
+                        onClick={() => handleSendFriendRequest(selectedUser.match.id)}
+                        disabled={actionLoading}
+                        style={{
+                            flex: 1, padding: '10px 12px', borderRadius: 12,
+                            background: 'rgba(56,189,248,0.12)',
+                            border: '1px solid rgba(56,189,248,0.25)',
+                            color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <UserPlus size={14} color="#38bdf8" />
+                        Arkadaş Ekle
+                    </button>
 
-                <button
-                    onClick={() => sendSuperLike(selectedUser.match.id)}
-                    disabled={actionLoading}
-                    style={{
-                        width: '100%', padding: '12px 20px', borderRadius: 14,
-                        background: 'linear-gradient(135deg, var(--accent-gold), #ff8c00)',
-                        border: 'none',
-                        color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 14,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(255, 215, 0, 0.4)'
-                    }}
-                >
-                    {actionLoading ? <Loader className="animate-spin" size={16} /> : <Sparkles size={16} fill="white" />}
-                    Süper Beğeni (Anında Mesaj - 1000 Toz)
-                </button>
+                    <button
+                        onClick={() => sendSuperLike(selectedUser.match.id)}
+                        disabled={actionLoading}
+                        style={{
+                            flex: 1, padding: '10px 12px', borderRadius: 12,
+                            background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,140,0,0.15))',
+                            border: '1px solid rgba(255,215,0,0.35)',
+                            color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                            transition: 'all 0.2s', boxShadow: '0 2px 10px rgba(255,215,0,0.2)'
+                        }}
+                    >
+                        {actionLoading ? <Loader className="animate-spin" size={13} /> : <Sparkles size={13} fill="var(--accent-gold)" color="var(--accent-gold)" />}
+                        Süper Beğeni
+                    </button>
+                </div>
             </motion.div>
         </div>
     );
