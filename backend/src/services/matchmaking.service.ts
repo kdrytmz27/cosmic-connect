@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import { UserRole } from '../enums/UserRole';
+import { prisma } from '../index';
 
 // FEAT-05: Zodiac compatibility scoring for matchmaking
 const FIRE = ['Aries', 'Leo', 'Sagittarius', 'Koç', 'Aslan', 'Yay'];
