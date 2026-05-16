@@ -144,6 +144,20 @@ export const matchmakingService = {
             timeoutCallback
         });
 
+        // VULN 35 FIX COMPATIBILITY: We must insert a temporary SWIPE_MATCH record so that
+        // the "Force Match Protection" in friendship.service.ts acceptMatch doesn't block legitimate matchmaking socket matches!
+        try {
+            await prisma.friendship.create({
+                data: {
+                    user1Id: p1.userId,
+                    user2Id: p2.userId,
+                    status: 'SWIPE_MATCH' as any
+                }
+            });
+        } catch (e) {
+            // Might already exist due to quick re-queue, ignore
+        }
+
         return { roomId, duration };
     },
 

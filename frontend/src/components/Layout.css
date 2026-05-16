@@ -14,11 +14,12 @@
 
 /* ── Bottom Nav Shell ── */
 .bottom-nav {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    right: 8px;
-    width: auto;
+    position: fixed;
+    bottom: max(8px, env(safe-area-inset-bottom, 8px));
+    left: 50%;
+    transform: translateX(-50%) translateZ(0);
+    width: calc(100% - 16px);
+    max-width: 500px;
     height: 64px;
     display: flex;
     justify-content: center;
@@ -29,7 +30,6 @@
     border: 1px solid rgba(139, 92, 246, 0.12);
     border-radius: 28px;
     box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.3);
-    transform: translateZ(0);
 }
 
 /* ── Nav track – controls how many items spread ── */
