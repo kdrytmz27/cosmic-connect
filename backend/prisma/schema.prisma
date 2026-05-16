@@ -293,3 +293,9 @@ model BlockedUser {
   @@index([blockerId])
   @@index([blockedId])
 }
+
+model ProcessedWebhook {
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  createdAt DateTime @default(now())
+}

@@ -29,57 +29,68 @@ export const BADGE_DEFINITIONS = {
 
 export class BadgeService {
     static async checkAndAwardBadges(userId: string) {
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            include: {
-                _count: {
-                    select: {
-                        sentGifts: true,
-                        friendshipsUser1: true,
-                        friendshipsUser2: true
+        const MAX_RETRIES = 3;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                include: {
+                    _count: {
+                        select: {
+                            sentGifts: true,
+                            friendshipsUser1: true,
+                            friendshipsUser2: true
+                        }
                     }
                 }
-            }
-        });
-
-        if (!user) return [];
-
-        const existingBadges: string[] = JSON.parse(user.badges || '[]');
-        const newBadges: string[] = [...existingBadges];
-        const awardedNow: string[] = [];
-
-        // 1. Star Explorer (Level >= 5)
-        if (!newBadges.includes('STAR_EXPLORER') && user.level >= 5) {
-            newBadges.push('STAR_EXPLORER');
-            awardedNow.push('STAR_EXPLORER');
-        }
-
-        // 2. Generous Soul (Gifts >= 5)
-        if (!newBadges.includes('GENEROUS_SOUL') && user._count.sentGifts >= 5) {
-            newBadges.push('GENEROUS_SOUL');
-            awardedNow.push('GENEROUS_SOUL');
-        }
-
-        // 3. Daily Pilgrim (Streak >= 7)
-        if (!newBadges.includes('DAILY_PILGRIM') && user.loginStreak >= 7) {
-            newBadges.push('DAILY_PILGRIM');
-            awardedNow.push('DAILY_PILGRIM');
-        }
-
-        // 4. Social Butterfly (Friends >= 10)
-        const friendshipCount = user._count.friendshipsUser1 + user._count.friendshipsUser2;
-        if (!newBadges.includes('SOCIAL_BUTTERFLY') && friendshipCount >= 10) {
-            newBadges.push('SOCIAL_BUTTERFLY');
-            awardedNow.push('SOCIAL_BUTTERFLY');
-        }
-
-        if (awardedNow.length > 0) {
-            await prisma.user.update({
-                where: { id: userId },
-                data: { badges: JSON.stringify(newBadges) }
             });
-        }
 
-        return awardedNow;
+            if (!user) return [];
+
+            const existingBadges: string[] = JSON.parse(user.badges || '[]');
+            const newBadges: string[] = [...existingBadges];
+            const awardedNow: string[] = [];
+
+            // 1. Star Explorer (Level >= 5)
+            if (!newBadges.includes('STAR_EXPLORER') && user.level >= 5) {
+                newBadges.push('STAR_EXPLORER');
+                awardedNow.push('STAR_EXPLORER');
+            }
+
+            // 2. Generous Soul (Gifts >= 5)
+            if (!newBadges.includes('GENEROUS_SOUL') && user._count.sentGifts >= 5) {
+                newBadges.push('GENEROUS_SOUL');
+                awardedNow.push('GENEROUS_SOUL');
+            }
+
+            // 3. Daily Pilgrim (Streak >= 7)
+            if (!newBadges.includes('DAILY_PILGRIM') && user.loginStreak >= 7) {
+                newBadges.push('DAILY_PILGRIM');
+                awardedNow.push('DAILY_PILGRIM');
+            }
+
+            // 4. Social Butterfly (Friends >= 10)
+            const friendshipCount = user._count.friendshipsUser1 + user._count.friendshipsUser2;
+            if (!newBadges.includes('SOCIAL_BUTTERFLY') && friendshipCount >= 10) {
+                newBadges.push('SOCIAL_BUTTERFLY');
+                awardedNow.push('SOCIAL_BUTTERFLY');
+            }
+
+            if (awardedNow.length > 0) {
+                const updatedCount = await prisma.user.updateMany({
+                    where: { id: userId, badges: user.badges },
+                    data: { badges: JSON.stringify(newBadges) }
+                });
+
+                // Başarılı ise çık ve rozetleri dön
+                if (updatedCount.count > 0) {
+                    return awardedNow;
+                }
+                // Başarısız ise başa dön ve güncel `badges` stringini tekrar Memory'e çek
+            } else {
+                // Eklenecek yeni rozet yoksa doğrudan çık
+                return [];
+            }
+        }
+        return [];
     }
 }

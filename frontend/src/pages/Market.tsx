@@ -1,23 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
-import { Sparkles, Crown, Zap, Clock, Check } from 'lucide-react';
+import { Sparkles, Crown, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
+import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 const Market = () => {
     const { isPremium, stardustBalance, updateEconomy } = useAuth();
     const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
 
-    const buyStardust = async (amount: number) => {
+    const [stardustPackages, setStardustPackages] = useState<PurchasesPackage[]>([]);
+    const [premiumPackage, setPremiumPackage] = useState<PurchasesPackage | null>(null);
+
+    useEffect(() => {
+        const loadOfferings = async () => {
+            try {
+                const offerings = await Purchases.getOfferings();
+                if (offerings.current && offerings.current.availablePackages.length > 0) {
+                    const packages = offerings.current.availablePackages;
+                    setPremiumPackage(packages.find(p => p.identifier.toLowerCase().includes('premium')) || null);
+                    setStardustPackages(packages.filter(p => !p.identifier.toLowerCase().includes('premium')));
+                }
+            } catch (e) {
+                console.error("Error loading revenuecat offerings (Belki de Emülatördesiniz?):", e);
+            }
+        };
+        loadOfferings();
+    }, []);
+
+    const purchaseRevenueCatPackage = async (pack: PurchasesPackage) => {
         setLoading(true);
         try {
-            const res = await api.post('/premium/buy-stardust', { amount });
-            updateEconomy({ stardustBalance: res.data.balance });
-            showToast(`${amount} Yıldız Tozu başarıyla eklendi!`, 'success');
-        } catch (e) {
-            // Toast will be shown by interceptor
+            await Purchases.purchasePackage({ aPackage: pack });
+            showToast('Ödeme sistem tarafından onaylandıktan sonra bakiyenize eklenecek!', 'success');
+        } catch (e: any) {
+            if (!e.userCancelled) {
+                showToast('Ödeme işlemi iptal edildi veya başarısız.', 'error');
+            }
         } finally {
             setLoading(false);
         }
@@ -28,15 +49,25 @@ const Market = () => {
         try {
             const res = await api.post('/user/daily-reward/claim');
             updateEconomy({ stardustBalance: res.data.newBalance });
-            showToast(`Günlük ödül alındı! +${res.data.rewardAmount} Yıldız Tozu 🌟 (${res.data.streak}. Gün Serisi)`, 'success');
+            showToast(`Günlük ödül alındı! +${res.data.rewardAmount} Yıldız Tozu 🌟 (${res.data.streak}. Gün)`, 'success');
         } catch (e) {
-            // Toast will be shown by interceptor
         } finally {
             setLoading(false);
         }
     };
 
-    const subscribePremium = async () => {
+    const buyStardustDev = async (amount: number) => {
+        setLoading(true);
+        try {
+            const res = await api.post('/premium/buy-stardust', { amount });
+            updateEconomy({ stardustBalance: res.data.balance });
+            showToast(`${amount} Yıldız Tozu başarıyla eklendi!`, 'success');
+        } catch (e) { } finally {
+            setLoading(false);
+        }
+    };
+
+    const subscribePremiumDev = async () => {
         setLoading(true);
         try {
             await api.post('/premium/buy-premium');
@@ -59,7 +90,6 @@ const Market = () => {
                 </div>
             </div>
 
-            {/* Daily Reward Section */}
             <motion.div
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -81,7 +111,6 @@ const Market = () => {
                 </button>
             </motion.div>
 
-            {/* Premium Section */}
             <motion.div
                 animate={isPremium ? {} : {
                     boxShadow: ['0 0 15px rgba(255,215,0,0)', '0 0 15px rgba(255,215,0,0.3)', '0 0 15px rgba(255,215,0,0)']
@@ -96,11 +125,10 @@ const Market = () => {
                 </div>
 
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <motion.li initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Sınırsız günlük eşleşme (Kaydırma)</motion.li>
-                    <motion.li initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Günde 5 bedava Süper Beğeni</motion.li>
-                    <motion.li initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Günde 10 defa bedava Ek Süre (Maçlarda)</motion.li>
-                    <motion.li initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> 320 saniyelik uzun eşleşme süresi</motion.li>
-                    <motion.li initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Yeni kişileri bulanıklık olmadan görme</motion.li>
+                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Sınırsız günlük eşleşme (Kaydırma)</li>
+                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Günde 5 bedava Süper Beğeni</li>
+                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Günde 10 defa bedava Ek Süre (Maçlarda)</li>
+                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> 320 saniyelik uzun eşleşme süresi</li>
                 </ul>
 
                 {isPremium ? (
@@ -110,52 +138,47 @@ const Market = () => {
                 ) : (
                     <button
                         disabled={loading}
-                        onClick={subscribePremium}
+                        onClick={() => premiumPackage ? purchaseRevenueCatPackage(premiumPackage) : subscribePremiumDev()}
                         className="btn-primary"
                         style={{ width: '100%', background: 'linear-gradient(45deg, var(--accent-gold), #ff8c00)', color: 'white' }}>
-                        Premium'a Geç (Demo: Ücretsiz)
+                        {premiumPackage ? `${premiumPackage.product.priceString} / ${premiumPackage.product.title}` : 'Premium\'a Geç (Dev Test)'}
                     </button>
                 )}
             </motion.div>
 
-            <h2 style={{ fontSize: 20, marginBottom: 16 }}>Yıldız Tozu Al</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[
-                    { amount: 500, price: '₺19.99', icon: <Sparkles size={24} color="var(--accent-gold)" /> },
-                    { amount: 1500, price: '₺49.99', icon: <Zap size={24} color="var(--accent-pink)" /> },
-                    { amount: 5000, price: '₺129.99', icon: <Crown size={24} color="var(--accent-purple)" /> },
-                    { amount: 10000, price: '₺199.99', icon: <Clock size={24} color="var(--text-primary)" /> },
-                ].map((pack, idx) => (
-                    <motion.div key={idx}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.1, type: 'spring', stiffness: 300, damping: 25 }}
-                        whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(139, 92, 246, 0.3)' }}
-                        whileTap={{ scale: 0.95 }}
-                        className="glass-panel shine-card"
-                        style={{ padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', position: 'relative' }}
-                    >
-                        {pack.icon}
-                        <div style={{ fontSize: 20, fontWeight: 'bold' }}>{pack.amount}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Yıldız Tozu</div>
-                        <button
-                            disabled={loading}
-                            onClick={() => buyStardust(pack.amount)}
-                            style={{ marginTop: 8, background: 'rgba(255,255,255,0.1)', border: 'none', padding: '8px 16px', borderRadius: 20, color: 'white', fontWeight: 'bold', width: '100%', cursor: 'pointer' }}>
-                            {pack.price}
-                        </button>
-                    </motion.div>
-                ))}
-            </div>
+            <h2 style={{ fontSize: 20, marginBottom: 16 }}>Market (Gerçek Ürünler)</h2>
+            {stardustPackages.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)' }}>Mağaza yükleniyor veya Google Servisleri kapalı...</p>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {stardustPackages.map((pack, idx) => (
+                        <motion.div key={idx}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="glass-panel shine-card"
+                            style={{ padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, border: '1px solid rgba(255,255,255,0.08)' }}
+                        >
+                            <Sparkles size={24} color="var(--accent-gold)" />
+                            <div style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>{pack.product.title.split(' ')[0]}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Yıldız Tozu</div>
+                            <button
+                                disabled={loading}
+                                onClick={() => purchaseRevenueCatPackage(pack)}
+                                style={{ marginTop: 8, background: 'rgba(255,255,255,0.1)', border: 'none', padding: '8px 16px', borderRadius: 20, color: 'white', fontWeight: 'bold', width: '100%', cursor: 'pointer' }}>
+                                {pack.product.priceString}
+                            </button>
+                        </motion.div>
+                    ))}
+                </div>
+            )}
 
-            {/* Test Helper */}
             <div style={{ marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20 }}>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>Geliştirici Test Miktarı: Bedava</p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>[Geliştirici Test] RevenueCat çalışmazsa:</p>
                 <button
                     disabled={loading}
-                    onClick={() => buyStardust(10000)}
+                    onClick={() => buyStardustDev(10000)}
                     style={{ background: 'transparent', border: '1px dashed var(--accent-gold)', color: 'var(--accent-gold)', padding: 12, borderRadius: 12, width: '100%', marginTop: 8, cursor: 'pointer' }}>
-                    +10.000 Yıldız Tozu Ekle (Demo)
+                    +10.000 Yıldız Tozu Ekle (Dev)
                 </button>
             </div>
         </div >

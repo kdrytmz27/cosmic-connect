@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
+    "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/ios": "^8.2.0",
+    "@revenuecat/purchases-capacitor": "^13.1.0",
     "axios": "^1.13.6",
     "framer-motion": "^12.34.3",
     "jwt-decode": "^4.0.0",

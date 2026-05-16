@@ -90,11 +90,12 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-app.use(express.json());
+// VULN 63 FIX: Removed duplicate express.json() call - already defined at line 81 with 10kb limit
 import path from 'path';
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 import notificationRoutes from './routes/notification.routes';
+import revenuecatRoutes from './routes/revenuecat.routes';
 
 // ... Middleware imports remain correctly configured above
 
@@ -110,6 +111,7 @@ app.use('/api/tarot', tarotRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notification', notificationRoutes);
 app.use('/api/quests', questRoutes);
+app.use('/api/revenuecat', revenuecatRoutes);
 
 import { globalErrorHandler } from './middlewares/errorHandler';
 import { NotFoundError } from './utils/errors';
@@ -133,6 +135,9 @@ const PORT = process.env.PORT || 3000;
 
 async function bootstrap() {
     try {
+        await prisma.user.updateMany({ data: { isOnline: false } });
+        logger.info('Tüm hayalet online profiller çevrimdışına çekildi.');
+
         httpServer.listen(PORT, () => {
             logger.info(`Server listening on port ${PORT}`);
         });

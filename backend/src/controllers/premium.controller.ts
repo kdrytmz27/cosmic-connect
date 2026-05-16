@@ -2,54 +2,13 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 
 export const buyStardust = async (req: Request, res: Response) => {
-    try {
-        const userId = req.user?.userId;
-        const { amount } = req.body;
-        if (!userId || !amount) { return res.status(400).json({ error: 'Invalid config' }); }
-
-        // Validate amount to prevent negative injection or absurdly high values
-        const parsedAmount = Number(amount);
-        if (!Number.isInteger(parsedAmount) || parsedAmount <= 0 || parsedAmount > 10000) {
-            return res.status(400).json({ error: 'Invalid stardust amount. Must be 1-10000.' });
-        }
-
-        // TODO: In production, validate payment receipt (Apple Pay / Google Pay / Stripe)
-        // before crediting Stardust. Without this, users can call this endpoint directly!
-
-        const updated = await prisma.user.update({
-            where: { id: userId },
-            data: { stardustBalance: { increment: parsedAmount } }
-        });
-        res.json({ message: 'Stardust purchased!', balance: updated.stardustBalance });
-    } catch (e) {
-        res.status(500).json({ error: 'Server error' });
-    }
+    // SECURITY PATCH: Stardust purchases must be handled via verified RevenueCat webhooks
+    return res.status(403).json({ error: 'Lütfen satın alımları mobil uygulama üzerinden yapın. (Yetkisiz API kullanımı)' });
 };
 
 export const buyPremium = async (req: Request, res: Response) => {
-    try {
-        const userId = req.user?.userId;
-        if (!userId) { return res.status(400).json({ error: 'Auth error' }); }
-
-        // TODO: Integrate payment gateway verification before activating premium
-        // Currently activates premium without payment — MUST be secured before production
-        const updated = await prisma.user.update({
-            where: { id: userId },
-            data: {
-                isPremium: true,
-                superLikesLeft: 5,
-                extraTimeLeft: 10
-            },
-            // Exclude sensitive fields from response
-            select: {
-                id: true, email: true, name: true, isPremium: true,
-                superLikesLeft: true, extraTimeLeft: true, stardustBalance: true
-            }
-        });
-        res.json({ message: 'Premium activated!', user: updated });
-    } catch (e) {
-        res.status(500).json({ error: 'Server error' });
-    }
+    // SECURITY PATCH: Premium purchases must be handled via verified RevenueCat webhooks
+    return res.status(403).json({ error: 'Lütfen satın alımları mobil uygulama üzerinden yapın. (Yetkisiz API kullanımı)' });
 };
 
 export const recordSwipe = async (req: Request, res: Response) => {
@@ -85,15 +44,19 @@ export const recordSwipe = async (req: Request, res: Response) => {
             if (user.stardustBalance < 20) {
                 return res.status(403).json({ error: 'Not enough stardust for more swipes' });
             }
-            const updated = await prisma.user.update({
-                where: { id: userId },
+            const updatedCount = await prisma.user.updateMany({
+                where: { id: userId, stardustBalance: { gte: 20 } },
                 data: {
                     dailySwipes: { increment: 1 },
                     stardustBalance: { decrement: 20 },
                     lastSwipeDate: new Date()
                 }
             });
-            return res.json({ message: 'Swipe recorded (-20 stardust)', remaining: updated.stardustBalance, dailySwipes: updated.dailySwipes });
+            if (updatedCount.count === 0) {
+                return res.status(403).json({ error: 'Yetersiz bakiye (veya işlem reddedildi)' });
+            }
+            const userState = await prisma.user.findUnique({ where: { id: userId } });
+            return res.json({ message: 'Swipe recorded (-20 stardust)', remaining: userState?.stardustBalance, dailySwipes: userState?.dailySwipes });
         }
 
         // Free swipe
@@ -147,9 +110,18 @@ export const unblurProfile = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Not enough stardust to unblur' });
         }
 
-        await prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, stardustBalance: { gte: 500 } },
             data: { stardustBalance: { decrement: 500 } }
+        });
+
+        if (updatedCount.count === 0) {
+            return res.status(403).json({ error: 'Not enough stardust to unblur (yetersiz bakiye kilitlendi)' });
+        }
+
+        // FIX #34: Create relationship record to make this purchase permanent
+        await prisma.friendship.create({
+            data: { user1Id: userId, user2Id: targetId, status: 'SWIPE_MATCH' as any }
         });
 
         // Return only safe fields — never expose passwordHash, twoFactorSecret, etc.
@@ -176,6 +148,20 @@ export const superLike = async (req: Request, res: Response) => {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return res.status(404).json({ error: 'Not found' });
 
+        // VULN 45 FIX: VIP Harassment SuperLike Block Bypass
+        const isBlocked = await prisma.blockedUser.findFirst({
+            where: {
+                OR: [
+                    { blockerId: userId, blockedId: targetId },
+                    { blockerId: targetId, blockedId: userId }
+                ]
+            }
+        });
+
+        if (isBlocked) {
+            return res.status(403).json({ error: 'Super Beğeni iptal edildi: Engellendiğiniz kişilere erişemezsiniz.' });
+        }
+
         // Check for existing friendship to prevent duplicates
         const existingFriendship = await prisma.friendship.findFirst({
             where: { user1Id: userId, user2Id: targetId }
@@ -196,12 +182,16 @@ export const superLike = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Not enough stardust for super like' });
         }
 
-        await prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, ...(useFree ? { superLikesLeft: { gt: 0 } } : { stardustBalance: { gte: cost } }) },
             data: {
                 ...(useFree ? { superLikesLeft: { decrement: 1 } } : { stardustBalance: { decrement: cost } })
             }
         });
+
+        if (updatedCount.count === 0) {
+            return res.status(403).json({ error: 'İşlem engellendi (Bakiye veya hak yetersiz).' });
+        }
 
         // Add them as friends automatically to bypass match limits
         await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId } });
@@ -239,14 +229,19 @@ export const addExtraTime = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Not enough stardust' });
         }
 
-        const updated = await prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, ...(useFree ? { extraTimeLeft: { gt: 0 } } : { stardustBalance: { gte: cost } }) },
             data: {
                 ...(useFree ? { extraTimeLeft: { decrement: 1 } } : { stardustBalance: { decrement: cost } })
             }
         });
 
-        res.json({ success: true, remaining: updated.stardustBalance });
+        if (updatedCount.count === 0) {
+            return res.status(403).json({ error: 'İşlem engellendi (Bakiye veya hak yetersiz).' });
+        }
+
+        const freshUser = await prisma.user.findUnique({ where: { id: userId } });
+        res.json({ success: true, remaining: freshUser?.stardustBalance });
     } catch (e) {
         res.status(500).json({ error: 'Server error' });
     }

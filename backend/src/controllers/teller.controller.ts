@@ -58,12 +58,18 @@ export const bookAppointment = async (req: Request, res: Response) => {
             where: { user1Id: targetTeller.userId, user2Id: userId }
         });
 
-        const txTasks: any[] = [
-            prisma.user.update({
-                where: { id: userId },
+        // Transactions ensure we take stardust AND book the appointment safely using atomic updateMany
+        const txResults = await prisma.$transaction(async (tx) => {
+            const updateCount = await tx.user.updateMany({
+                where: { id: userId, stardustBalance: { gte: APPOINTMENT_COST } },
                 data: { stardustBalance: { decrement: APPOINTMENT_COST } }
-            }),
-            prisma.appointment.create({
+            });
+
+            if (updateCount.count === 0) {
+                throw new Error('Not enough stardust (Güvenlik Kalkanı: Race Condition Engellendi)');
+            }
+
+            const appt = await tx.appointment.create({
                 data: {
                     userId,
                     tellerId,
@@ -74,19 +80,19 @@ export const bookAppointment = async (req: Request, res: Response) => {
                     fortuneType: fortuneType || 'TAROT',
                     imageUrl: imageUrl || null
                 }
-            })
-        ];
+            });
 
-        if (!existingIn) {
-            txTasks.push(prisma.friendship.create({ data: { user1Id: userId, user2Id: targetTeller.userId } }));
-        }
-        if (!existingOut && userId !== targetTeller.userId) {
-            txTasks.push(prisma.friendship.create({ data: { user1Id: targetTeller.userId, user2Id: userId } }));
-        }
+            if (!existingIn) {
+                await tx.friendship.create({ data: { user1Id: userId, user2Id: targetTeller.userId } });
+            }
+            if (!existingOut && userId !== targetTeller.userId) {
+                await tx.friendship.create({ data: { user1Id: targetTeller.userId, user2Id: userId } });
+            }
 
-        // Transactions ensure we take stardust AND book the appointment safely
-        const txResults = await prisma.$transaction(txTasks);
-        logger.debug('[bookAppointment] Transaction successful. Created appointment:', { appointment: txResults[1] });
+            return appt;
+        });
+
+        logger.debug('[bookAppointment] Transaction successful. Created appointment:', { appointment: txResults });
 
         res.json({ message: 'Appointment booked successfully', cost: APPOINTMENT_COST });
     } catch (error) {
@@ -106,24 +112,38 @@ export const claimDailyStardust = async (req: Request, res: Response) => {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
-        // Check if already claimed today to prevent unlimited farming
-        const today = new Date().toISOString().split('T')[0];
-        const lastClaim = user.lastDailyReward ? new Date(user.lastDailyReward).toISOString().split('T')[0] : null;
+        // VULN 52 FIX: Timezone Desync fixed by using +3 UTC offset for standard local reset mapping
+        const trOffset = 3 * 60 * 60 * 1000;
+        const now = new Date();
+        const trNow = new Date(now.getTime() + trOffset);
+        const today = trNow.toISOString().split('T')[0];
+
+        let lastClaim = null;
+        if (user.lastDailyReward) {
+            const lr = new Date(user.lastDailyReward.getTime() + trOffset);
+            lastClaim = lr.toISOString().split('T')[0];
+        }
 
         if (lastClaim === today) {
             res.status(400).json({ error: 'Bugün zaten günlük stardust aldınız!' });
             return;
         }
 
-        const updated = await prisma.user.update({
-            where: { id: userId },
+        const updateCount = await prisma.user.updateMany({
+            where: { id: userId, lastDailyReward: user.lastDailyReward },
             data: {
                 stardustBalance: { increment: 50 },
                 lastDailyReward: new Date()
             }
         });
 
-        res.json({ message: 'Stardust claimed!', newBalance: updated.stardustBalance });
+        if (updateCount.count === 0) {
+            res.status(400).json({ error: 'Ödül çoktan alınmış (Race Condition Lock).' });
+            return;
+        }
+
+        const updated = await prisma.user.findUnique({ where: { id: userId } });
+        res.json({ message: 'Stardust claimed!', newBalance: updated?.stardustBalance });
     } catch (e) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -194,18 +214,30 @@ export const interpretFortune = async (req: Request, res: Response) => {
             res.status(404).json({ error: 'Fortune not found or not yours' }); return;
         }
 
-        const [updated] = await prisma.$transaction([
-            prisma.appointment.update({
-                where: { id: appointmentId },
-                data: { status: 'COMPLETED', interpretation }
-            }),
-            prisma.user.update({
-                where: { id: userId },
-                data: { stardustBalance: { increment: appointment.stardustPrice } }
-            })
-        ]);
+        // VULN 53 FIX: Minimum interpretation limit to block fraud (empty/single word interpretations)
+        if (!interpretation || interpretation.trim().length < 50) {
+            res.status(400).json({ error: 'Yorumunuz çok kısa. Lütfen detaylı bir fal yorumu yazınız. (Min. 50 harf)' });
+            return;
+        }
 
-        res.json({ message: 'Fortune interpreted successfully', appointmentId: updated.id, status: updated.status });
+        // Ensure atomic update, only update if PENDING to prevent infinite money glitch
+        const updatedCount = await prisma.appointment.updateMany({
+            where: { id: appointmentId, status: 'PENDING' },
+            data: { status: 'COMPLETED', interpretation }
+        });
+
+        if (updatedCount.count === 0) {
+            res.status(400).json({ error: 'Bu fal zaten yorumlanmış!' });
+            return;
+        }
+
+        // Only credit the teller IF the appointment was actually updated from PENDING to COMPLETED
+        await prisma.user.update({
+            where: { id: userId },
+            data: { stardustBalance: { increment: appointment.stardustPrice } }
+        });
+
+        res.json({ message: 'Fortune interpreted successfully', appointmentId, status: 'COMPLETED' });
     } catch (e) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -245,31 +277,38 @@ export const rateTeller = async (req: Request, res: Response) => {
         }
 
         const tellerId = appointment.tellerId;
-        const teller = appointment.teller;
 
-        const newReviewCount = teller.reviewCount + 1;
-        const newRating = ((teller.rating * teller.reviewCount) + rating) / newReviewCount;
-
-        const transactionOps: any[] = [
-            prisma.appointment.update({
-                where: { id: appointmentId },
+        await prisma.$transaction(async (tx) => {
+            const updateCount = await tx.appointment.updateMany({
+                where: { id: appointmentId, userRating: null, status: 'COMPLETED' },
                 data: { userRating: rating }
-            }),
-            prisma.fortuneTeller.update({
+            });
+
+            if (updateCount.count === 0) {
+                throw new Error('Fal çoktan oylanmış (Spam Koruması)');
+            }
+
+            // VULN 55 FIX: Memory-Overwrite Race Condition fixed using database-level aggregate inside transaction lock
+            const agg = await tx.appointment.aggregate({
+                where: { tellerId, userRating: { not: null } },
+                _avg: { userRating: true },
+                _count: { userRating: true }
+            });
+
+            await tx.fortuneTeller.update({
                 where: { id: tellerId },
-                data: { reviewCount: newReviewCount, rating: newRating }
-            })
-        ];
+                data: {
+                    reviewCount: agg._count.userRating || 1,
+                    rating: agg._avg.userRating || rating
+                }
+            });
 
-        if (comment && comment.trim() !== '') {
-            transactionOps.push(
-                prisma.tellerComment.create({
+            if (comment && comment.trim() !== '') {
+                await tx.tellerComment.create({
                     data: { tellerId, userId, comment: comment.trim() }
-                })
-            );
-        }
-
-        await prisma.$transaction(transactionOps);
+                });
+            }
+        });
 
         res.json({ message: 'Rated successfully' });
     } catch (e) {

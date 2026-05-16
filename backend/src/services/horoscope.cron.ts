@@ -86,17 +86,22 @@ export function startHoroscopeCron() {
 
             logger.info(`[HoroscopeCron] Sending to ${users.length} users...`);
 
-            for (const user of users) {
+            // VULN 64 FIX: Replace serial N+1 loop with concurrent Promise.all for notifications
+            await Promise.all(users.map(async (user) => {
                 const sign = user.sunSign ?? 'Aries';
                 const message = getRandomMessage(sign);
-                await notificationService.createNotification({
-                    userId: user.id,
-                    type: 'DAILY_HOROSCOPE',
-                    title: `✨ Günlük ${sign} Yorumunuz`,
-                    content: message,
-                    actionUrl: '/fortune'
-                });
-            }
+                try {
+                    await notificationService.createNotification({
+                        userId: user.id,
+                        type: 'DAILY_HOROSCOPE',
+                        title: `✨ Günlük ${sign} Yorumunuz`,
+                        content: message,
+                        actionUrl: '/fortune'
+                    });
+                } catch (innerErr) {
+                    logger.error(`[HoroscopeCron] Failed for user ${user.id}:`, innerErr);
+                }
+            }));
             logger.info('[HoroscopeCron] Done sending daily horoscopes.');
         } catch (err) {
             logger.error('[HoroscopeCron] Error:', err);

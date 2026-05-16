@@ -7,6 +7,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { ToastProvider } from './context/ToastContext';
 import { PageTransition } from './components/PageTransition';
 import { BrandLoader } from './components/BrandLoader';
+import { HardwareBackButton } from './components/HardwareBackButton';
 import Layout from './components/Layout';
 
 // Lazy loaded pages
@@ -33,24 +34,41 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// Sadece normal kullanıcılar için (falcılar erişemez)
+// VULN 67 FIX: Sadece normal kullanıcılar için (falcılar erişemez)
+// Not: Client-side guard sadece UX amaçlıdır. Backend her zaman kendi yetkisini doğrular.
 export const UserOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
-  if (user?.role === 'FORTUNE_TELLER') return <Navigate to="/teller-dashboard" replace />;
+  const { user, token } = useAuth();
+  // JWT'den role oku (localStorage user.role'den değil)
+  let roleFromToken: string | null = null;
+  if (token) {
+    try { const d: any = JSON.parse(atob(token.split('.')[1])); roleFromToken = d.role; } catch { }
+  }
+  const role = roleFromToken || user?.role;
+  if (role === 'FORTUNE_TELLER') return <Navigate to="/teller-dashboard" replace />;
   return <>{children}</>;
 };
 
-// Sadece falcılar için (normal kullanıcılar erişemez)
+// VULN 67 FIX: Sadece falcılar için (normal kullanıcılar erişemez)
 export const TellerOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
-  if (user?.role !== 'FORTUNE_TELLER' && user?.role !== 'ADMIN') return <Navigate to="/" replace />;
+  const { user, token } = useAuth();
+  let roleFromToken: string | null = null;
+  if (token) {
+    try { const d: any = JSON.parse(atob(token.split('.')[1])); roleFromToken = d.role; } catch { }
+  }
+  const role = roleFromToken || user?.role;
+  if (role !== 'FORTUNE_TELLER' && role !== 'ADMIN') return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
-// Sadece adminler için
+// VULN 67 FIX: Sadece adminler için
 export const AdminOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
-  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
+  const { user, token } = useAuth();
+  let roleFromToken: string | null = null;
+  if (token) {
+    try { const d: any = JSON.parse(atob(token.split('.')[1])); roleFromToken = d.role; } catch { }
+  }
+  const role = roleFromToken || user?.role;
+  if (role !== 'ADMIN') return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
@@ -128,6 +146,7 @@ const AnimatedRoutes = () => {
 function App() {
   return (
     <HashRouter>
+      <HardwareBackButton />
       <ToastProvider>
         <AuthProvider>
           <AnimatedRoutes />

@@ -43,8 +43,12 @@ export const notificationService = {
         actionUrl?: string,
         entityId?: string
     }) => {
+        // VULN 58 FIX: Truncate oversized payloads to prevent Notification Payload Bomb
+        const safeTitle = data.title.substring(0, 100);
+        const safeContent = data.content.substring(0, 500);
+
         const notification = await prisma.notification.create({
-            data
+            data: { ...data, title: safeTitle, content: safeContent }
         });
 
         // Online ise anında gönder

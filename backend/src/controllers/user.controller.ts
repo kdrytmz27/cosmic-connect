@@ -62,13 +62,6 @@ export const updateCosmicStatus = async (req: Request, res: Response) => {
     res.json(result);
 };
 
-export const applyPenalty = async (req: Request, res: Response) => {
-    const userId = req.user?.userId;
-    if (!userId) throw new UnauthorizedError();
-    const result = await UserService.applyPenalty(userId);
-    res.json(result);
-};
-
 export const reportUser = async (req: Request, res: Response) => {
     // Placeholder implementation
     res.json({ success: true });
@@ -95,6 +88,8 @@ export const getSynastry = async (req: Request, res: Response) => {
         { birthDate: targetUser.birthDate, birthTime: targetUser.birthTime, name: targetUser.name || targetUser.email?.split('@')[0] || 'Kullanıcı' }
     );
 
+    // SECURITY: Do NOT include birthDate or birthTime in the res.json payload.
+    // They are sensitive PII (Personally Identifiable Information). Always cherry-pick fields!
     res.json({
         report,
         user1: { id: currentUser.id, name: currentUser.name || currentUser.email?.split('@')[0], avatar: currentUser.avatar, sunSign: currentUser.sunSign, moonSign: currentUser.moonSign, risingSign: currentUser.risingSign },

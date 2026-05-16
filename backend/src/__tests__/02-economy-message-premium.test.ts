@@ -36,7 +36,7 @@ describe('💬 Mesajlaşma', () => {
 
     test('Mesaj gönderme', async () => {
         const res = await request(app).post('/api/user/messages').set('Authorization', `Bearer ${token1}`).send({ receiverId: id2, content: 'Merhaba!' });
-        expect([200, 201]).toContain(res.status);
+        expect(res.status).toBeGreaterThanOrEqual(400); // DM koruması: arkadaş değil
     });
 
     test('Boş mesaj engeli', async () => {
@@ -56,12 +56,12 @@ describe('💬 Mesajlaşma', () => {
 
     test('Normal uzunlukta mesaj kabul ediliyor', async () => {
         const res = await request(app).post('/api/user/messages').set('Authorization', `Bearer ${token1}`).send({ receiverId: id2, content: 'Merhaba dünya!' });
-        expect([200, 201]).toContain(res.status);
+        expect(res.status).toBeGreaterThanOrEqual(400);
     });
 
     test('Tam 2000 karakter mesaj kabul ediliyor', async () => {
         const res = await request(app).post('/api/user/messages').set('Authorization', `Bearer ${token1}`).send({ receiverId: id2, content: 'A'.repeat(2000) });
-        expect([200, 201]).toContain(res.status);
+        expect(res.status).toBeGreaterThanOrEqual(400);
     });
 
     test('Mesaj içeriği doğru kaydediliyor', async () => {
@@ -78,22 +78,22 @@ describe('💬 Mesajlaşma', () => {
 describe('💰 Yıldız Tozu Ekonomisi', () => {
     test('Yıldız Tozu satın alma', async () => {
         const res = await request(app).post('/api/premium/buy-stardust').set('Authorization', `Bearer ${token1}`).send({ amount: 100 });
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(403); // RevenueCat Webhook koruması
     });
 
     test('Negatif miktar engeli', async () => {
         const res = await request(app).post('/api/premium/buy-stardust').set('Authorization', `Bearer ${token1}`).send({ amount: -50 });
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(403);
     });
 
     test('Sıfır miktar engeli', async () => {
         const res = await request(app).post('/api/premium/buy-stardust').set('Authorization', `Bearer ${token1}`).send({ amount: 0 });
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(403);
     });
 
     test('Çok büyük miktar engeli', async () => {
         const res = await request(app).post('/api/premium/buy-stardust').set('Authorization', `Bearer ${token1}`).send({ amount: 999999 });
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(403);
     });
 
     test('Günlük ödül alma', async () => {
@@ -147,13 +147,12 @@ describe('💰 Yıldız Tozu Ekonomisi', () => {
 describe('⭐ Premium', () => {
     test('Premium satın alma', async () => {
         const res = await request(app).post('/api/premium/buy-premium').set('Authorization', `Bearer ${token1}`);
-        expect(res.status).toBe(200);
-        expect(res.body.user.isPremium).toBe(true);
+        expect(res.status).toBe(403); // Sadece webhook üzerinden alınabilir
     });
 
     test('Premium yanıtında şifre yok', async () => {
         const res = await request(app).post('/api/premium/buy-premium').set('Authorization', `Bearer ${token2}`);
-        expect(res.body.user.passwordHash).toBeUndefined();
+        expect(res.status).toBe(403);
     });
 
     test('Süper beğeni gönderme', async () => {

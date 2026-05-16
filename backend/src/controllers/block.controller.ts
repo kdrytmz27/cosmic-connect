@@ -63,18 +63,31 @@ export const reportUser = async (req: Request, res: Response) => {
     if (!reason) { res.status(400).json({ error: 'Şikayet nedeni gereklidir.' }); return; }
 
     try {
-        await prisma.report.create({
-            data: { reporterId, reportedId: targetId, reason, description }
+        const result = await prisma.$transaction(async (tx) => {
+            const existingReport = await tx.report.findFirst({
+                where: { reporterId, reportedId: targetId }
+            });
+
+            // VULN 69 FIX: Do NOT create a new report if one already exists for this pair
+            if (existingReport) {
+                throw Object.assign(new Error('Bu kullanıcıyı zaten şikâyet ettiniz.'), { statusCode: 400 });
+            }
+
+            const report = await tx.report.create({
+                data: { reporterId, reportedId: targetId, reason, description }
+            });
+
+            // VULN 41 FIX: Atomik Spam Report Attack Engelleyici - sadece ilk raporda karma düşsün
+            await tx.user.update({
+                where: { id: targetId },
+                data: { karma: { decrement: 20 } }
+            });
+            return report;
         });
 
-        // FEAT-10: Reduce karma of the reported user
-        await prisma.user.update({
-            where: { id: targetId },
-            data: { karma: { decrement: 20 } }
-        });
-
-        res.json({ message: 'Şikayetiniz iletildi. Teşekkürler.' });
-    } catch (err) {
-        res.status(500).json({ error: 'Şikayet gönderilemedi.' });
+        res.json({ message: 'Şikâyetiniz iletildi. Teşekkürler.', report: result });
+    } catch (err: any) {
+        if (err.statusCode === 400) return res.status(400).json({ error: err.message });
+        res.status(500).json({ error: 'Şikâyet gönderilemedi.' });
     }
 };

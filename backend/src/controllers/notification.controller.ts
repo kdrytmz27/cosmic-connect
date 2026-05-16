@@ -6,7 +6,9 @@ export const getNotifications = async (req: Request, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) throw new UnauthorizedError();
 
-    const limit = parseInt(req.query.limit as string) || 50;
+    // VULN 62 FIX: Cap limit to prevent full-table dump via ?limit=999999
+    const rawLimit = parseInt(req.query.limit as string) || 50;
+    const limit = Math.min(rawLimit, 100);
     const notifications = await notificationService.getUserNotifications(userId, limit);
     res.json({ notifications });
 };

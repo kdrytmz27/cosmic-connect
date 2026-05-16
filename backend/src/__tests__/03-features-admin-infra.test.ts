@@ -124,18 +124,18 @@ describe('🃏 Tarot', () => {
 // =============================================
 describe('🌍 Grup Sohbet', () => {
     test('Burç odasındaki mesajları getirme', async () => {
-        const res = await request(app).get('/api/group/Aries').set('Authorization', `Bearer ${token1}`);
+        const res = await request(app).get('/api/group/Gemini').set('Authorization', `Bearer ${token1}`);
         expect(res.status).toBe(200);
         expect(res.body.messages).toBeDefined();
     });
 
-    test('Farklı burç odası', async () => {
+    test('Farklı burç odası erişim engeli (IDOR)', async () => {
         const res = await request(app).get('/api/group/Pisces').set('Authorization', `Bearer ${token1}`);
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(403);
     });
 
     test('Mesajlar dizi olarak dönüyor', async () => {
-        const res = await request(app).get('/api/group/Leo').set('Authorization', `Bearer ${token1}`);
+        const res = await request(app).get('/api/group/Gemini').set('Authorization', `Bearer ${token1}`);
         expect(Array.isArray(res.body.messages)).toBe(true);
     });
 

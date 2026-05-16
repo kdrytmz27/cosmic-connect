@@ -83,6 +83,8 @@ export async function cleanDatabase() {
     await prisma.message.deleteMany();
     await prisma.groupMessage.deleteMany();
     await prisma.friendship.deleteMany();
+    await prisma.notification.deleteMany();
+    await prisma.blockedUser.deleteMany();
     await prisma.photo.deleteMany();
     await prisma.user.deleteMany();
 }

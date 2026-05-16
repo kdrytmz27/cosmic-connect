@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
     getProfile, getDailyMatch, addFriend, getFriends, getMessages, sendMessage,
-    updateProfile, applyPenalty, reportUser, updateCosmicStatus, getDailyRewardStatus,
+    updateProfile, reportUser, updateCosmicStatus, getDailyRewardStatus,
     claimDailyReward, getLeaderboard, passMatch, extendMatch, makeMatchPermanent,
     acceptMatch, deleteFriend, getSynastry,
     sendFriendRequest, acceptFriendRequest, rejectFriendRequest, getPendingRequests, getFriendRequestStatus
@@ -35,7 +35,6 @@ router.get('/messages/:id', authenticate as any, getMessages as any);
 router.post('/messages', authenticate as any, sendMessage as any);
 router.put('/profile', authenticate as any, updateProfile as any);
 router.put('/status', authenticate as any, updateCosmicStatus as any);
-router.post('/penalty', authenticate as any, applyPenalty as any);
 
 import { submitReport } from '../controllers/admin.report.controller';
 router.post('/report', authenticate as any, submitReport as any);

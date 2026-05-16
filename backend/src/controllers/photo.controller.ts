@@ -46,6 +46,16 @@ export const uploadGalleryPhoto = async (req: Request, res: Response): Promise<a
             return res.status(400).json({ message: 'Lütfen bir resim seçin' });
         }
 
+        // Fix 31: Storage Exhaustion Limit
+        const userPhotosCount = await prisma.photo.count({ where: { userId } });
+        if (userPhotosCount >= 9) {
+            const filePath = path.join(__dirname, '../../uploads', req.file.filename);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath); // Delete freshly uploaded file to save disk
+            }
+            return res.status(400).json({ message: 'Galeri limitine (9 fotoğraf) ulaştınız. Lütfen önce mevcut fotoğraflarınızı silin.' });
+        }
+
         const photoUrl = `/uploads/${req.file.filename}`;
 
         const photo = await prisma.photo.create({

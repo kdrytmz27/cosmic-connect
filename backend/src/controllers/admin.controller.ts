@@ -115,6 +115,14 @@ export const approveRejectTeller = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid status' });
         }
 
+        // VULN 48 FIX: Teller Application State 500 Crash (Admin Overwrite Error Prevented)
+        const applicationRecord = await prisma.tellerApplication.findUnique({ where: { id: id as string } });
+        if (!applicationRecord) return res.status(404).json({ error: 'Application not found' });
+
+        if (applicationRecord.status !== 'PENDING') {
+            return res.status(400).json({ error: `State Error: This application is already ${applicationRecord.status}. Cannot re-approve.` });
+        }
+
         const application = await prisma.tellerApplication.update({
             where: { id: id as string },
             data: { status: status as string }

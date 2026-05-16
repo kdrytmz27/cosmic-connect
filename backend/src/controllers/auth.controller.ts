@@ -29,7 +29,8 @@ export const register = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Password must contain uppercase, lowercase, and a number' });
         }
 
-        const existingUser = await prisma.user.findUnique({ where: { email } });
+        const normalizedEmail = email.toLowerCase();
+        const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existingUser) {
             return res.status(400).json({ error: 'User already exists' });
         }
@@ -37,6 +38,18 @@ export const register = async (req: Request, res: Response) => {
         const bDate = new Date(birthDate);
         if (isNaN(bDate.getTime())) {
             return res.status(400).json({ error: 'Invalid birthDate' });
+        }
+
+        // VULN 49 FIX: COPPA / Dating Rules Minimum Age (18) Validation Bypass
+        const today = new Date();
+        let age = today.getFullYear() - bDate.getFullYear();
+        const m = today.getMonth() - bDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < bDate.getDate())) {
+            age--;
+        }
+
+        if (age < 18) {
+            return res.status(403).json({ error: 'Güvenlik İhlali: Uygulamaya kayıt olmak için reşit (>18) olmalısınız. (Uluslararası sözleşme koruması)' });
         }
 
         const year = bDate.getUTCFullYear();
@@ -53,7 +66,7 @@ export const register = async (req: Request, res: Response) => {
 
         const newUser = await prisma.user.create({
             data: {
-                email,
+                email: normalizedEmail,
                 passwordHash,
                 birthDate: bDate,
                 birthTime,
@@ -95,7 +108,8 @@ export const login = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const normalizedEmail = email.toLowerCase();
+        const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -149,6 +163,10 @@ export const setup2FA = async (req: Request, res: Response) => {
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (user.isTwoFactorEnabled) {
+            return res.status(403).json({ error: 'Güvenlik İhlali (2FA Overwrite): Mevcut olan korumayı silip yenisini kuramazsınız!' });
+        }
 
         const secret = speakeasy.generateSecret({ name: `CosmicConnect (${user.email})` });
 

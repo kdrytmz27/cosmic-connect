@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import { Purchases } from '@revenuecat/purchases-capacitor';
 
 interface EconomyUpdate {
     stardustBalance?: number;
@@ -54,9 +55,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             try {
                 const decoded: any = jwtDecode(token);
                 setUserId(decoded.userId);
+                // RevenueCat'e kullanıcının arka uçtaki veritabanı ID'sini bildiriyoruz.
+                Purchases.logIn({ appUserID: decoded.userId }).catch(e => console.error("RC LogIn Error:", e));
             } catch (e) {
                 logout();
             }
+        } else {
+            Purchases.logOut().catch(e => console.error("RC LogOut Error:", e));
         }
     }, [token]);
 

@@ -44,8 +44,14 @@ export class UserService {
         }
 
         if (currentUserId !== targetUserId) {
+            // VULN 70 FIX: Remove sensitive PII from other users' profiles
             (targetUser as any).stardustBalance = undefined;
             (targetUser as any).matchScore = undefined;
+            (targetUser as any).email = undefined;       // email is PII - never expose to other users
+            (targetUser as any).birthDate = undefined;    // exact birthDate is sensitive PII
+            (targetUser as any).birthTime = undefined;    // birthTime is PII
+            (targetUser as any).latitude = undefined;     // exact GPS coordinates are PII
+            (targetUser as any).longitude = undefined;    // exact GPS coordinates are PII
         }
 
         const dateStr: string = new Date().toISOString().split('T')[0] ?? '2026-01-01';
@@ -82,8 +88,9 @@ export class UserService {
         let currentUser = await prisma.user.findUnique({ where: { id: userId } });
         if (!currentUser) throw new NotFoundError('User not found');
 
-        const todayStr = new Date().toISOString().split('T')[0];
-        const lastDate = currentUser.lastSwipeDate ? new Date(currentUser.lastSwipeDate).toISOString().split('T')[0] : null;
+        const trOffset = 3 * 3600 * 1000;
+        const todayStr = new Date(Date.now() + trOffset).toISOString().split('T')[0];
+        const lastDate = currentUser.lastSwipeDate ? new Date(currentUser.lastSwipeDate.getTime() + trOffset).toISOString().split('T')[0] : null;
         if (lastDate !== todayStr) {
             currentUser = await prisma.user.update({
                 where: { id: userId },
@@ -93,7 +100,8 @@ export class UserService {
 
         const { page = 1, limit = 10, minAge, maxAge, gender, minScore = 0 } = filters;
         const pageNum = parseInt(page as string);
-        const limitNum = parseInt(limit as string);
+        // VULN 71 FIX: Cap limit to prevent full-table scan via ?limit=99999
+        const limitNum = Math.min(parseInt(limit as string) || 10, 50);
         const minScoreNum = parseInt(minScore as string);
 
         let dateFilters: any = {};
@@ -130,7 +138,7 @@ export class UserService {
 
         if (candidates.length === 0) return { message: 'No matches found right now', matches: [] };
 
-        const dateStr = new Date().toISOString().split('T')[0] || '2026-01-01';
+        const dateStr = new Date(Date.now() + trOffset).toISOString().split('T')[0] || '2026-01-01';
 
         const evaluated = await Promise.all(candidates.map(async (candidate) => {
             const comp = calculateQuickSynastryScore(
@@ -188,7 +196,8 @@ export class UserService {
     static async updateProfile(userId: string, updateData: any) {
         const dataToUpdate: any = {};
         // REMOVED 'avatar' to prevent Arbitrary File Deletion / Path Traversal
-        const allowedKeys = ['name', 'bio', 'hobby', 'music', 'weekend', 'lookingForHobby', 'lookingForMusic', 'lookingForWeekend', 'moonSign', 'risingSign'];
+        // REMOVED 'moonSign' and 'risingSign' to prevent Astrology Score Cheating!
+        const allowedKeys = ['name', 'bio', 'hobby', 'music', 'weekend', 'lookingForHobby', 'lookingForMusic', 'lookingForWeekend'];
         for (const key of allowedKeys) {
             if (updateData[key] !== undefined) dataToUpdate[key] = updateData[key];
         }
@@ -199,14 +208,6 @@ export class UserService {
         });
 
         return { profile: updated };
-    }
-
-    static async applyPenalty(userId: string) {
-        await prisma.user.update({
-            where: { id: userId },
-            data: { matchScore: { decrement: 5 } }
-        });
-        return { success: true };
     }
 
     static async updateCosmicStatus(userId: string, cosmicStatus: string | null) {
@@ -257,24 +258,25 @@ export class UserService {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) throw new NotFoundError('User not found');
 
+        const trOffset = 3 * 3600 * 1000;
         const now = new Date();
+        const trNow = new Date(now.getTime() + trOffset);
         let streak = user.loginStreak || 0;
 
         if (user.lastDailyReward) {
-            const lastReward = new Date(user.lastDailyReward);
+            const lr = new Date(user.lastDailyReward.getTime() + trOffset);
             const isSameDay =
-                now.getFullYear() === lastReward.getFullYear() &&
-                now.getMonth() === lastReward.getMonth() &&
-                now.getDate() === lastReward.getDate();
+                trNow.getUTCFullYear() === lr.getUTCFullYear() &&
+                trNow.getUTCMonth() === lr.getUTCMonth() &&
+                trNow.getUTCDate() === lr.getUTCDate();
 
             if (isSameDay) throw new BadRequestError('Already claimed today');
 
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterday = new Date(trNow.getTime() - 24 * 3600 * 1000);
             const isYesterday =
-                yesterday.getFullYear() === lastReward.getFullYear() &&
-                yesterday.getMonth() === lastReward.getMonth() &&
-                yesterday.getDate() === lastReward.getDate();
+                yesterday.getUTCFullYear() === lr.getUTCFullYear() &&
+                yesterday.getUTCMonth() === lr.getUTCMonth() &&
+                yesterday.getUTCDate() === lr.getUTCDate();
 
             if (!isYesterday) streak = 0;
         }
@@ -282,14 +284,24 @@ export class UserService {
         streak += 1;
         const rewardAmount = Math.min(streak * CONSTANTS.REWARDS.DAILY_LOGIN_BASE, CONSTANTS.REWARDS.DAILY_LOGIN_MAX);
 
-        const updated = await prisma.user.update({
-            where: { id: userId },
+        // Optimistic Locking to prevent Race Conditions (Many claims at exact same ms)
+        const updatedCount = await prisma.user.updateMany({
+            where: {
+                id: userId,
+                lastDailyReward: user.lastDailyReward // Must exactly match the DB state we read
+            },
             data: {
                 lastDailyReward: now,
                 loginStreak: streak,
                 stardustBalance: { increment: rewardAmount }
             }
         });
+
+        if (updatedCount.count === 0) {
+            throw new BadRequestError('Reward already claimed (Race Condition Protected)');
+        }
+
+        const freshUser = await prisma.user.findUnique({ where: { id: userId } });
 
         await xpService.addXp(userId, CONSTANTS.REWARDS.DAILY_LOGIN_XP);
         await BadgeService.checkAndAwardBadges(userId);
@@ -298,12 +310,16 @@ export class UserService {
             success: true,
             reward: rewardAmount,
             newStreak: streak,
-            stardustBalance: updated.stardustBalance
+            stardustBalance: freshUser?.stardustBalance
         };
     }
 
     static async getLeaderboard() {
         const topUsers = await prisma.user.findMany({
+            // VULN 44 FIX: Ghost leaderboards (Exclude ADMIN and BANNED)
+            where: {
+                role: { in: ['STANDARD', 'FORTUNE_TELLER'] }
+            },
             orderBy: { xp: 'desc' },
             take: 50,
             select: { id: true, name: true, avatar: true, level: true, xp: true }

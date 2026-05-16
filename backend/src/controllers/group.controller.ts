@@ -4,6 +4,17 @@ import { prisma } from '../index';
 export const getGroupMessages = async (req: Request, res: Response) => {
     try {
         const sign = req.params.sign as string;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user || user.sunSign !== sign) {
+            return res.status(403).json({ error: 'IDOR Koruması: Sadece kendi burcunuzun grubuna erişebilirsiniz.' });
+        }
+
         const messages = await prisma.groupMessage.findMany({
             where: { roomId: sign },
             orderBy: { createdAt: 'desc' },

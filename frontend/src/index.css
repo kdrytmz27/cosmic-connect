@@ -44,10 +44,9 @@ body {
 }
 
 .glass-panel {
-  background: rgba(15, 12, 25, 0.75);
+  background: rgba(15, 12, 25, 0.85);
   border: 1px solid var(--card-border);
   border-radius: 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .glass-nav {
@@ -60,7 +59,7 @@ body {
 }
 
 .glow-box {
-  box-shadow: 0 0 20px var(--accent-purple-glow);
+  border: 1px solid var(--accent-purple-glow);
 }
 
 button {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Heart, XCircle, Star, Loader } from 'lucide-react';
+import { X, Sparkles, Heart, Star, Loader, UserPlus } from 'lucide-react';
 import { BACKEND_URL } from '../../api/client';
 
 interface MatchDetailModalProps {
@@ -8,10 +8,7 @@ interface MatchDetailModalProps {
     setSelectedUser: (user: any | null) => void;
     user: any;
     actionLoading: boolean;
-    swipeWarning: boolean;
-    handlePass: (id: string) => void;
     sendSuperLike: (id: string) => void;
-    handleMatch: (id: string) => void;
     handleSendFriendRequest: (id: string) => void;
     navigate: (path: string) => void;
 }
@@ -21,10 +18,7 @@ export const MatchDetailModal = ({
     setSelectedUser,
     user,
     actionLoading,
-    swipeWarning,
-    handlePass,
     sendSuperLike,
-    handleMatch,
     handleSendFriendRequest,
     navigate
 }: MatchDetailModalProps) => {
@@ -174,31 +168,11 @@ export const MatchDetailModal = ({
                     </div>
                 )}
 
-                {swipeWarning && (
-                    <div style={{ background: 'rgba(255,0,0,0.1)', border: '1px solid red', color: 'white', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-                        Bugünkü ücretsiz 20 kaydırma hakkınızı doldurdunuz. Bundan sonraki her kaydırma <b>20 Yıldız Tozu</b> alacaktır.
-                    </div>
-                )}
-                <button
-                    onClick={() => navigate(`/synastry/${selectedUser.match.id}`)}
-                    style={{
-                        width: '100%', padding: '12px 20px', borderRadius: 14, marginBottom: 16,
-                        background: 'linear-gradient(135deg, rgba(236,72,153,0.15), rgba(139,92,246,0.15))',
-                        border: '1px solid rgba(236,72,153,0.25)',
-                        color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 14,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <Sparkles size={16} color="var(--accent-gold)" />
-                    Synastri Analizi
-                </button>
-
                 <button
                     onClick={() => handleSendFriendRequest(selectedUser.match.id)}
                     disabled={actionLoading}
                     style={{
-                        width: '100%', padding: '12px 20px', borderRadius: 14, marginBottom: 16,
+                        width: '100%', padding: '12px 20px', borderRadius: 14, marginBottom: 12,
                         background: 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(14,165,233,0.15))',
                         border: '1px solid rgba(56,189,248,0.25)',
                         color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 14,
@@ -206,36 +180,25 @@ export const MatchDetailModal = ({
                         transition: 'all 0.2s'
                     }}
                 >
-                    <Sparkles size={16} color="#38bdf8" />
+                    <UserPlus size={16} color="#38bdf8" />
                     Arkadaşlık İsteği Gönder
                 </button>
 
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
-                    <button
-                        onClick={() => handlePass(selectedUser.match.id)}
-                        disabled={actionLoading}
-                        style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 0.2s' }}
-                    >
-                        <XCircle size={28} />
-                    </button>
-
-                    <button
-                        onClick={() => sendSuperLike(selectedUser.match.id)}
-                        disabled={actionLoading}
-                        title="Süper Beğeni (Anında Mesaj - 500 Yıldız Tozu)"
-                        style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-gold), #ff8c00)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(255, 215, 0, 0.4)' }}
-                    >
-                        {actionLoading ? <Loader className="animate-spin" size={24} /> : <Sparkles size={28} fill="white" />}
-                    </button>
-
-                    <button
-                        onClick={() => handleMatch(selectedUser.match.id)}
-                        disabled={actionLoading}
-                        style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-pink), var(--accent-purple))', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(236, 72, 153, 0.4)' }}
-                    >
-                        {actionLoading ? <Loader className="animate-spin" size={28} /> : <Heart size={28} fill="white" />}
-                    </button>
-                </div>
+                <button
+                    onClick={() => sendSuperLike(selectedUser.match.id)}
+                    disabled={actionLoading}
+                    style={{
+                        width: '100%', padding: '12px 20px', borderRadius: 14,
+                        background: 'linear-gradient(135deg, var(--accent-gold), #ff8c00)',
+                        border: 'none',
+                        color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 14,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(255, 215, 0, 0.4)'
+                    }}
+                >
+                    {actionLoading ? <Loader className="animate-spin" size={16} /> : <Sparkles size={16} fill="white" />}
+                    Süper Beğeni (Anında Mesaj - 1000 Toz)
+                </button>
             </motion.div>
         </div>
     );

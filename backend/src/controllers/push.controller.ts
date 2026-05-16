@@ -20,6 +20,12 @@ export const registerPushToken = async (req: Request, res: Response) => {
     }
 
     try {
+        // VULN 51 FIX: Push Token Privacy Leak Prevented (Clear from old owners first)
+        await prisma.user.updateMany({
+            where: { pushToken },
+            data: { pushToken: null }
+        });
+
         await prisma.user.update({
             where: { id: userId },
             data: { pushToken }

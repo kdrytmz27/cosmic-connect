@@ -14,12 +14,15 @@ const checkAndResetQuests = async (userId: string) => {
     if (!user) return null;
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // VULN 42 FIX: UTC+3 Timezone Fix for Quests
+    const TR_OFFSET = 3 * 3600 * 1000;
+    const adjustedToday = new Date(today.getTime() + TR_OFFSET);
+    adjustedToday.setUTCHours(0, 0, 0, 0);
 
-    const lastReset = user.lastQuestReset ? new Date(user.lastQuestReset) : null;
-    if (lastReset) lastReset.setHours(0, 0, 0, 0);
+    const lastReset = user.lastQuestReset ? new Date(new Date(user.lastQuestReset).getTime() + TR_OFFSET) : null;
+    if (lastReset) lastReset.setUTCHours(0, 0, 0, 0);
 
-    if (!lastReset || lastReset < today) {
+    if (!lastReset || lastReset < adjustedToday) {
         return await prisma.user.update({
             where: { id: userId },
             data: {
@@ -71,15 +74,22 @@ export const claimQuests = async (req: Request, res: Response) => {
             return;
         }
 
-        const updated = await prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, dailyQuestClaimed: false },
             data: {
                 dailyQuestClaimed: true,
                 stardustBalance: { increment: QUEST_REWARD }
             }
         });
 
-        res.json({ message: 'Ödüller alındı!', remainingStardust: updated.stardustBalance });
+        if (updatedCount.count === 0) {
+            res.status(400).json({ error: 'Ödül çoktan alınmış (Race Condition Lock).' });
+            return;
+        }
+
+        const updated = await prisma.user.findUnique({ where: { id: userId } });
+
+        res.json({ message: 'Ödüller alındı!', remainingStardust: updated?.stardustBalance });
     } catch (e) {
         res.status(500).json({ error: 'Server error' });
     }

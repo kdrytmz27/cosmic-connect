@@ -111,7 +111,8 @@ export const friendshipService = {
 
         const mutualFriends = await prisma.friendship.findMany({
             where: { user1Id: { in: requestToIds }, user2Id: userId },
-            include: { user1: { select: { id: true, email: true, name: true, avatar: true, sunSign: true, stardustBalance: true, isOnline: true, lastSeen: true } } }
+            // VULN 75 FIX: Removed email from select - email is PII and must never be exposed to other users
+            include: { user1: { select: { id: true, name: true, avatar: true, sunSign: true, stardustBalance: true, isOnline: true, lastSeen: true } } }
         });
 
         // Batch fetch last messages for ALL friends in ONE query (eliminates N+1)
@@ -214,12 +215,22 @@ export const friendshipService = {
             return { success: true, expiresAt: recentRecord.expiresAt!.toISOString(), serverTime: Date.now() };
         }
 
+        // FIX #35: Verify if they actually matched before! Prevent "Forced Match / Infinite Karma"
+        const existingRelation = await prisma.friendship.findFirst({
+            where: {
+                OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }]
+            }
+        });
+        if (!existingRelation) {
+            throw new Error('Geçersiz İşlem: Eşleşme olmadan zorla kabul sağlanamaz (Force Match Kalkanı).');
+        }
+
         await prisma.friendship.deleteMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
 
         const expiresAt = new Date(Date.now() + CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
-        await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' as any } });
+        // VULN 73 FIX: Removed duplicate friendship create (was creating user1Id+user2Id twice)
         await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' as any } });
         await prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' as any } });
 
@@ -239,11 +250,17 @@ export const friendshipService = {
         await prisma.friendship.deleteMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
-        const updated = await prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, dailyMatchPasses: { gt: 0 } },
             data: { dailyMatchPasses: { decrement: 1 } }
         });
-        return { success: true, dailyMatchPasses: updated.dailyMatchPasses };
+
+        if (updatedCount.count === 0) {
+            throw new Error('Pas geçme hakkı kalmadı veya yarış durumu engellendi.');
+        }
+
+        const freshUser = await prisma.user.findUnique({ where: { id: userId } });
+        return { success: true, dailyMatchPasses: freshUser?.dailyMatchPasses };
     },
 
     extendMatch: async (userId: string, targetId: string) => {
@@ -256,19 +273,26 @@ export const friendshipService = {
         const newExpiresAt = new Date();
         newExpiresAt.setHours(newExpiresAt.getHours() + CONSTANTS.DURATIONS.MATCH_EXTENSION_HOURS);
 
+        // VULN 54 FIX: Atomic update for balance deduction to prevent Negative Farming
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, stardustBalance: { gte: CONSTANTS.COSTS.EXTEND_MATCH } },
+            data: { stardustBalance: { decrement: CONSTANTS.COSTS.EXTEND_MATCH } }
+        });
+
+        if (updatedCount.count === 0) {
+            throw new Error('Yetersiz Yıldız Tozu veya Hatalı İşlem (Race Condition Engellendi)');
+        }
+
         await prisma.friendship.updateMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] },
             data: { expiresAt: newExpiresAt }
         });
-        await prisma.user.update({
-            where: { id: userId },
-            data: { stardustBalance: { decrement: CONSTANTS.COSTS.EXTEND_MATCH } }
-        });
 
         const io = getSocketIo();
         if (io) {
-            const extender = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
-            const extenderName = extender?.name || extender?.email?.split('@')[0] || 'Birisi';
+            // VULN 76 FIX: Never expose email in socket events
+            const extender = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+            const extenderName = extender?.name || 'Kozmik Yolcu';
             io.to(targetId).emit('chatExtended', {
                 extendedBy: userId, extenderName, expiresAt: newExpiresAt.toISOString()
             });
@@ -283,14 +307,21 @@ export const friendshipService = {
             throw new Error('Yetersiz Yıldız Tozu');
         }
 
+        // VULN 54 FIX: Atomic update for balance deduction to prevent Negative Farming
+        const updatedCount = await prisma.user.updateMany({
+            where: { id: userId, stardustBalance: { gte: CONSTANTS.COSTS.MAKE_MATCH_PERMANENT } },
+            data: { stardustBalance: { decrement: CONSTANTS.COSTS.MAKE_MATCH_PERMANENT } }
+        });
+
+        if (updatedCount.count === 0) {
+            throw new Error('Yetersiz Yıldız Tozu veya Hatalı İşlem (Race Condition Engellendi)');
+        }
+
         await prisma.friendship.updateMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] },
             data: { expiresAt: null }
         });
-        await prisma.user.update({
-            where: { id: userId },
-            data: { stardustBalance: { decrement: CONSTANTS.COSTS.MAKE_MATCH_PERMANENT } }
-        });
+
         return { success: true };
     },
 
@@ -299,9 +330,19 @@ export const friendshipService = {
         if (areFriends) throw new Error('Zaten arkadaşsınız');
 
         const existing = await prisma.friendRequest.findFirst({
-            where: { senderId: userId, receiverId, status: 'PENDING' }
+            where: { senderId: userId, receiverId }
         });
-        if (existing) throw new Error('Zaten bekleyen bir isteğiniz var');
+        if (existing) {
+            if (existing.status === 'PENDING') throw new Error('Zaten bekleyen bir isteğiniz var');
+            if (existing.status === 'REJECTED') {
+                const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                if (existing.createdAt > oneDayAgo) throw new Error('Bu kullanıcı isteğinizi kısa süre önce reddetti. Tekrar yollamak için beklemelisiniz.');
+
+                await prisma.friendRequest.update({ where: { id: existing.id }, data: { status: 'PENDING', createdAt: new Date() } });
+                await friendshipService.incrementDailyFriendRequest(userId);
+                return { success: true };
+            }
+        }
 
         const reverseRequest = await prisma.friendRequest.findFirst({
             where: { senderId: receiverId, receiverId: userId, status: 'PENDING' }

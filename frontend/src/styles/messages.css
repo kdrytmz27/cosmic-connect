@@ -614,11 +614,13 @@
 
   0%,
   100% {
-    box-shadow: 0 0 8px rgba(255, 215, 0, 0.2), 0 0 16px rgba(236, 72, 153, 0.1);
+    transform: scale(1);
+    opacity: 0.9;
   }
 
   50% {
-    box-shadow: 0 0 16px rgba(255, 215, 0, 0.4), 0 0 32px rgba(236, 72, 153, 0.2);
+    transform: scale(1.02);
+    opacity: 1;
   }
 }
 

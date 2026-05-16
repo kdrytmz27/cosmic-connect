@@ -59,18 +59,16 @@ export function setupSocket(io: Server) {
                 return;
             }
 
-            await matchmakingService.joinQueue({ userId, socketId: socket.id, matchScore: user?.matchScore || 100, isPremium: user?.isPremium || false, karma: user?.karma ?? 100 });
+            await matchmakingService.joinQueue({ userId, socketId: socket.id, matchScore: user?.matchScore || 100, isPremium: user?.isPremium || false, karma: user?.karma ?? 100, sunSign: user?.sunSign || null });
             socket.emit('queueStatus', { status: 'searching' });
 
-            // Try to match immediately after joining
-            const match = await matchmakingService.tryMatch();
-            if (match) {
+            // Try to match immediately after joining.
+            // Queue Starvation patched: process all possible matches
+            const matches = await matchmakingService.tryMatch();
+            for (const match of matches) {
                 const [p1, p2] = match;
                 // Create room for initial socket communication (matchFound event)
-                // No timeout callback needed — chat timer is now handled by acceptMatch + Messages
                 const { roomId, duration } = await matchmakingService.createRoom(p1, p2, (_rId) => {
-                    // Room expired but we don't create friendships here anymore
-                    // acceptMatch handles friendship creation and timer
                     matchmakingService.removeRoom(_rId);
                 });
 
@@ -80,8 +78,6 @@ export function setupSocket(io: Server) {
                 if (socket1 && socket2) {
                     socket1.join(roomId);
                     socket2.join(roomId);
-
-                    // Notify users of successful match and start the 5-second modal client-side
                     io.to(roomId).emit('matchFound', { roomId, expiresIn: duration / 1000, users: [p1.userId, p2.userId] });
                 }
             }
@@ -118,6 +114,10 @@ export function setupSocket(io: Server) {
             // Security check: Only broadcast if the sender is actually inside the socket room
             if (!socket.rooms.has(data.roomId)) return;
 
+            // VULN 56 FIX: Content length validation to prevent Bandwidth Amplification
+            if (!data.content || typeof data.content !== 'string') return;
+            if (data.content.length > 1000) return;
+
             // Broadcast message back so frontend displays it
             socket.to(data.roomId).emit('chatMessage', {
                 senderId: userId,
@@ -132,34 +132,30 @@ export function setupSocket(io: Server) {
             matchmakingService.removeRoom(data.roomId);
         });
 
-        // sendPrivateMessage removed (handled by REST API message.controller and socket emit)
-
-        socket.on('typing', (data: { roomId?: string, receiverId?: string }) => {
+        // Handle typing events strictly bound to roomId to prevent receiverId socket harassment (Ghost Ping)
+        socket.on('typing', (data: { roomId?: string }) => {
             if (data.roomId && socket.rooms.has(data.roomId)) {
                 socket.to(data.roomId).emit('userTyping', { userId });
-            } else if (data.receiverId) {
-                io.to(data.receiverId).emit('userTyping', { senderId: userId });
             }
         });
 
-        socket.on('stopTyping', (data: { roomId?: string, receiverId?: string }) => {
+        socket.on('stopTyping', (data: { roomId?: string }) => {
             if (data.roomId && socket.rooms.has(data.roomId)) {
                 socket.to(data.roomId).emit('userStoppedTyping', { userId });
-            } else if (data.receiverId) {
-                io.to(data.receiverId).emit('userStoppedTyping', { senderId: userId });
             }
         });
 
-        socket.on('sendFriendRequest', (data: { roomId: string, targetId: string }) => {
-            io.to(data.targetId).emit('friendRequest');
-        });
+        // Removed insecure client-driven friend Request emits. 
+        // They are now handled strictly via server-side REST API calls which verify friendships in the DB.
 
-        socket.on('friendRequestAccepted', (data: { targetId: string }) => {
-            io.to(data.targetId).emit('friendRequestAccepted');
-        });
-
-        socket.on('joinGroup', (sign: string) => {
-            socket.join(`group_${sign}`);
+        socket.on('joinGroup', async (sign: string) => {
+            if (!userId) return;
+            const user = await prisma.user.findUnique({ where: { id: userId }, select: { sunSign: true, role: true } });
+            if (user?.role === UserRole.ADMIN || user?.sunSign === sign) {
+                socket.join(`group_${sign}`);
+            } else {
+                socket.emit('queueStatus', { status: 'error', message: 'Bu burç grubuna katılma yetkiniz yok.' });
+            }
         });
 
         socket.on('leaveGroup', (sign: string) => {
@@ -175,6 +171,12 @@ export function setupSocket(io: Server) {
             // Content validation
             if (!data.content || typeof data.content !== 'string' || data.content.trim().length === 0) return;
             if (data.content.length > 500) return; // Max message length
+
+            // VULN 57 FIX: Group Message IDOR - Verify user is actually a member of this group room
+            if (!socket.rooms.has(`group_${data.sign}`)) {
+                socket.emit('queueStatus', { status: 'error', message: 'IDOR Koruması: Bu gruba üye değilsiniz, mesaj gönderemezsiniz.' });
+                return;
+            }
 
             // Flood protection: 1 message per second per user
             const now = Date.now();

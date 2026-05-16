@@ -40,12 +40,13 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         newSocket.on('connect', () => {
-            console.log('Socket connected', newSocket.id);
+            // VULN 68 FIX: Hide socket ID from production logs (information disclosure)
+            if (import.meta.env.DEV) console.log('Socket connected', newSocket.id);
             setIsConnected(true);
         });
 
         newSocket.on('disconnect', () => {
-            console.log('Socket disconnected');
+            if (import.meta.env.DEV) console.log('Socket disconnected');
             setIsConnected(false);
         });
 

@@ -7,10 +7,12 @@ export const getFinancialReports = async (req: Request, res: Response) => {
 
         const dateFilter: any = {};
         if (startDate) {
-            dateFilter.gte = new Date(startDate as string);
+            const parsedStart = new Date(startDate as string);
+            if (!isNaN(parsedStart.getTime())) dateFilter.gte = parsedStart;
         }
         if (endDate) {
-            dateFilter.lte = new Date(endDate as string);
+            const parsedEnd = new Date(endDate as string);
+            if (!isNaN(parsedEnd.getTime())) dateFilter.lte = parsedEnd;
         }
 
         const whereClause = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};

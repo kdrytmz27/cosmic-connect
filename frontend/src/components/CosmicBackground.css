@@ -45,69 +45,40 @@
 
 /* Small Stars */
 .stars {
-    width: 2px;
-    height: 2px;
-    background: transparent;
-    box-shadow: 100px 200px #FFF, 500px 600px #FFF, 300px 400px #FFF, 800px 900px #FFF, 1200px 100px #FFF, 1500px 700px #FFF, 1800px 1300px #FFF, 200px 1800px #FFF, 600px 1500px #FFF, 1100px 1800px #FFF,
-        /* Add manually some spread to mimic shadow mixin since CSS without Sass can't use random */
-        55px 233px #FFF, 700px 888px #FFF, 333px 999px #FFF, 1999px 1999px #FFF, 1444px 333px #FFF, 555px 1111px #FFF, 999px 222px #FFF, 1222px 1444px #FFF, 1666px 888px #FFF, 444px 555px #FFF;
-    animation: animStar 150s linear infinite;
-}
-
-.stars:after {
-    content: " ";
-    position: absolute;
-    top: 2000px;
-    width: 2px;
-    height: 2px;
-    background: transparent;
-    box-shadow: inherit;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(white 1px, transparent 1px);
+    background-size: 50px 50px;
+    opacity: 0.5;
+    animation: simpleStarFloat 100s linear infinite;
 }
 
 /* Medium Stars */
 .stars2 {
-    width: 3px;
-    height: 3px;
-    background: transparent;
-    box-shadow: 150px 300px #FFF, 400px 800px #FFF, 900px 200px #FFF, 1600px 1100px #FFF, 1100px 400px #FFF, 700px 1600px #FFF, 1900px 600px #FFF, 300px 1900px #FFF, 1300px 1400px #FFF, 600px 100px #FFF;
-    animation: animStar 100s linear infinite;
-}
-
-.stars2:after {
-    content: " ";
-    position: absolute;
-    top: 2000px;
-    width: 3px;
-    height: 3px;
-    background: transparent;
-    box-shadow: inherit;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(white 1.5px, transparent 1.5px);
+    background-size: 100px 100px;
+    opacity: 0.7;
+    animation: simpleStarFloat 75s linear infinite;
 }
 
 /* Large Stars */
 .stars3 {
-    width: 4px;
-    height: 4px;
-    background: transparent;
-    box-shadow: 200px 400px #FFF, 800px 100px #FFF, 1400px 1500px #FFF, 500px 1800px #FFF, 1700px 900px #FFF;
-    animation: animStar 50s linear infinite;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(white 2px, transparent 2px);
+    background-size: 150px 150px;
+    opacity: 0.9;
+    animation: simpleStarFloat 50s linear infinite;
 }
 
-.stars3:after {
-    content: " ";
-    position: absolute;
-    top: 2000px;
-    width: 4px;
-    height: 4px;
-    background: transparent;
-    box-shadow: inherit;
-}
-
-@keyframes animStar {
+@keyframes simpleStarFloat {
     from {
         transform: translateY(0px)
     }
 
     to {
-        transform: translateY(-2000px)
+        transform: translateY(-200px)
     }
 }

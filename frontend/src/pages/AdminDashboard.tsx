@@ -33,7 +33,8 @@ export default function AdminDashboard() {
 
     const handleApplication = async (appId: string, status: 'APPROVED' | 'REJECTED') => {
         try {
-            await axios.post(`${BACKEND_URL}/api/teller/approve`, { applicationId: appId, status }, { headers: { Authorization: `Bearer ${token}` } });
+            // VULN 66 FIX: Use the correct admin-protected endpoint instead of the open teller endpoint
+            await axios.post(`${BACKEND_URL}/api/admin/tellers/applications/${appId}`, { status }, { headers: { Authorization: `Bearer ${token}` } });
             showToast(`Başvuru ${status === 'APPROVED' ? 'onaylandı' : 'reddedildi'}`, 'success');
             setApplications(prev => prev.filter(app => app.id !== appId));
         } catch (error) {

@@ -2,17 +2,20 @@ import { logger } from '../utils/logger';
 import { UserRole } from '../enums/UserRole';
 
 // FEAT-05: Zodiac compatibility scoring for matchmaking
-const FIRE = ['Aries', 'Leo', 'Sagittarius'];
-const EARTH = ['Taurus', 'Virgo', 'Capricorn'];
-const AIR = ['Gemini', 'Libra', 'Aquarius'];
-const WATER = ['Cancer', 'Scorpio', 'Pisces'];
+const FIRE = ['Aries', 'Leo', 'Sagittarius', 'Koç', 'Aslan', 'Yay'];
+const EARTH = ['Taurus', 'Virgo', 'Capricorn', 'Boğa', 'Başak', 'Oğlak'];
+const AIR = ['Gemini', 'Libra', 'Aquarius', 'İkizler', 'Terazi', 'Kova'];
+const WATER = ['Cancer', 'Scorpio', 'Pisces', 'Yengeç', 'Akrep', 'Balık'];
 
 function getElement(sign: string | null | undefined): string | null {
     if (!sign) return null;
-    if (FIRE.includes(sign)) return 'FIRE';
-    if (EARTH.includes(sign)) return 'EARTH';
-    if (AIR.includes(sign)) return 'AIR';
-    if (WATER.includes(sign)) return 'WATER';
+    const lowerSign = sign.toLowerCase();
+
+    // VULN 46 FIX: Zodiac Case Sensitivity (Case-Insensitive matching)
+    if (FIRE.some(s => s.toLowerCase() === lowerSign)) return 'FIRE';
+    if (EARTH.some(s => s.toLowerCase() === lowerSign)) return 'EARTH';
+    if (AIR.some(s => s.toLowerCase() === lowerSign)) return 'AIR';
+    if (WATER.some(s => s.toLowerCase() === lowerSign)) return 'WATER';
     return null;
 }
 
@@ -34,6 +37,7 @@ export interface QueuedPlayer {
     matchScore: number;
     isPremium: boolean;
     karma: number;
+    sunSign: string | null;
 }
 
 const queue: QueuedPlayer[] = [];
@@ -67,39 +71,32 @@ export const matchmakingService = {
         }
     },
 
-    async tryMatch(): Promise<[QueuedPlayer, QueuedPlayer] | null> {
+    async tryMatch(): Promise<[QueuedPlayer, QueuedPlayer][]> {
         logger.debug(`[Matchmaking] tryMatch called. Queue size: ${queue.length}`, { queue: queue.map(p => ({ userId: p.userId, score: p.matchScore })) });
+        const matchedPairs: [QueuedPlayer, QueuedPlayer][] = [];
+
         if (queue.length >= 2) {
             const { prisma } = await import('../index');
-            for (let i = 0; i < queue.length; i++) {
+            let i = 0;
+            while (i < queue.length) {
+                let matched = false;
                 for (let j = i + 1; j < queue.length; j++) {
                     const p1 = queue[i];
                     const p2 = queue[j];
                     if (!p1 || !p2) continue;
 
                     const scoreDiff = Math.abs(p1.matchScore - p2.matchScore);
+                    const compatBonus = getZodiacCompatBonus(p1.sunSign, p2.sunSign);
 
-                    // Fetch signs for compatibility bonus
-                    const [u1, u2] = await Promise.all([
-                        prisma.user.findUnique({ where: { id: p1.userId }, select: { sunSign: true, karma: true } }),
-                        prisma.user.findUnique({ where: { id: p2.userId }, select: { sunSign: true, karma: true } })
-                    ]);
-                    const compatBonus = getZodiacCompatBonus(u1?.sunSign, u2?.sunSign);
-
-                    // FEAT-13: Karma-based threshold bonus
-                    // Both players above 120 karma → extra +15 threshold (easier to match)
-                    // One player below 50 karma → -10 threshold (harder to match with clean players)
-                    const k1 = u1?.karma ?? 100;
-                    const k2 = u2?.karma ?? 100;
+                    const k1 = p1.karma ?? 100;
+                    const k2 = p2.karma ?? 100;
                     let karmaBonus = 0;
                     if (k1 >= 120 && k2 >= 120) karmaBonus = 15;
                     else if (k1 < 50 || k2 < 50) karmaBonus = -10;
 
                     const effectiveThreshold = 20 + compatBonus + karmaBonus;
 
-                    logger.debug(`[Matchmaking] Comparing ${p1.userId} (score:${p1.matchScore}) vs ${p2.userId} (score:${p2.matchScore}) diff:${scoreDiff} threshold:${effectiveThreshold}`);
                     if (scoreDiff <= effectiveThreshold) {
-                        // Check if these two users already have a relationship (friend, match, or swipe match)
                         const existingRelation = await prisma.friendship.findFirst({
                             where: {
                                 OR: [
@@ -110,20 +107,23 @@ export const matchmakingService = {
                         });
 
                         if (existingRelation) {
-                            logger.debug(`[Matchmaking] SKIP: ${p1.userId} <-> ${p2.userId} already have relationship (${existingRelation.status})`);
-                            continue; // Skip this pair, try others
+                            continue;
                         }
 
+                        matchedPairs.push([p1, p2]);
                         queue.splice(j, 1);
                         queue.splice(i, 1);
+                        matched = true;
                         logger.info(`[Matchmaking] MATCH FOUND! ${p1.userId} <-> ${p2.userId} (compat bonus: ${compatBonus})`);
-                        return [p1, p2];
+                        break;
                     }
                 }
+                if (!matched) {
+                    i++;
+                }
             }
-            // If queue length is large but no strict matches, could relax constraint here
         }
-        return null;
+        return matchedPairs;
     },
 
     async createRoom(p1: QueuedPlayer, p2: QueuedPlayer, timeoutCallback: (roomId: string) => void): Promise<{ roomId: string, duration: number }> {
@@ -170,5 +170,18 @@ export const matchmakingService = {
         const room = rooms.get(`room:${roomId}`);
         if (room && room.timeoutId) clearTimeout(room.timeoutId);
         rooms.delete(`room:${roomId}`);
+
+        try {
+            const { getSocketIo } = await import('../controllers/socket.controller');
+            const io = getSocketIo();
+            if (io) {
+                // Force user client to close chat UI
+                io.to(roomId).emit('chatEnded', { message: 'Süre doldu, kozmik bağlantı koptu.' });
+                // EVICT ALL: Prevent eavesdropping/hacked messages
+                io.socketsLeave(roomId);
+            }
+        } catch (e) {
+            logger.error(`[Socket] Error leaving room ${roomId}:`, e);
+        }
     }
 };

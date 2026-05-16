@@ -9,9 +9,11 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         const totalAppointments = await prisma.appointment.count();
         const pendingTellers = await prisma.tellerApplication.count({ where: { status: 'PENDING' } });
 
-        // Calculate total stardust in circulation
-        const users = await prisma.user.findMany({ select: { stardustBalance: true } });
-        const totalStardustCirculation = users.reduce((sum: number, user: { stardustBalance: number }) => sum + user.stardustBalance, 0);
+        // VULN 61 FIX: Replace N+1 full-table scan with a single aggregate query
+        const stardustAgg = await prisma.user.aggregate({
+            _sum: { stardustBalance: true }
+        });
+        const totalStardustCirculation = stardustAgg._sum.stardustBalance ?? 0;
 
         // Get daily new users (last 7 days grouped)
         const sevenDaysAgo = new Date();
