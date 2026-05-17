@@ -7,10 +7,14 @@ const getFinancialReports = async (req, res) => {
         const { startDate, endDate } = req.query;
         const dateFilter = {};
         if (startDate) {
-            dateFilter.gte = new Date(startDate);
+            const parsedStart = new Date(startDate);
+            if (!isNaN(parsedStart.getTime()))
+                dateFilter.gte = parsedStart;
         }
         if (endDate) {
-            dateFilter.lte = new Date(endDate);
+            const parsedEnd = new Date(endDate);
+            if (!isNaN(parsedEnd.getTime()))
+                dateFilter.lte = parsedEnd;
         }
         const whereClause = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
         // Stardust economy: Sum of appointments and gifts (Stardust leaving/entering system)

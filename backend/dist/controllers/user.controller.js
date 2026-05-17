@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendMessage = exports.getMessages = exports.getFriendRequestStatus = exports.getPendingRequests = exports.rejectFriendRequest = exports.acceptFriendRequest = exports.sendFriendRequest = exports.makeMatchPermanent = exports.extendMatch = exports.passMatch = exports.acceptMatch = exports.deleteFriend = exports.getFriends = exports.addFriend = exports.getSynastry = exports.reportUser = exports.applyPenalty = exports.updateCosmicStatus = exports.claimDailyReward = exports.getDailyRewardStatus = exports.getLeaderboard = exports.getDailyMatch = exports.updateProfile = exports.getProfile = void 0;
+exports.sendMessage = exports.getMessages = exports.getFriendRequestStatus = exports.getPendingRequests = exports.rejectFriendRequest = exports.acceptFriendRequest = exports.sendFriendRequest = exports.makeMatchPermanent = exports.extendMatch = exports.passMatch = exports.acceptMatch = exports.deleteFriend = exports.getFriends = exports.addFriend = exports.getSynastry = exports.reportUser = exports.updateCosmicStatus = exports.claimDailyReward = exports.getDailyRewardStatus = exports.getLeaderboard = exports.getDailyMatch = exports.updateProfile = exports.getProfile = void 0;
 const index_1 = require("../index");
 const user_service_1 = require("../services/user.service");
 const friendship_service_1 = require("../services/friendship.service");
@@ -66,14 +66,6 @@ const updateCosmicStatus = async (req, res) => {
     res.json(result);
 };
 exports.updateCosmicStatus = updateCosmicStatus;
-const applyPenalty = async (req, res) => {
-    const userId = req.user?.userId;
-    if (!userId)
-        throw new errors_1.UnauthorizedError();
-    const result = await user_service_1.UserService.applyPenalty(userId);
-    res.json(result);
-};
-exports.applyPenalty = applyPenalty;
 const reportUser = async (req, res) => {
     // Placeholder implementation
     res.json({ success: true });
@@ -94,6 +86,8 @@ const getSynastry = async (req, res) => {
     if (!currentUser || !targetUser)
         throw new errors_1.BadRequestError('User not found');
     const report = (0, synastry_service_1.calculateSynastryReport)({ birthDate: currentUser.birthDate, birthTime: currentUser.birthTime, name: currentUser.name || currentUser.email?.split('@')[0] || 'Kullanıcı' }, { birthDate: targetUser.birthDate, birthTime: targetUser.birthTime, name: targetUser.name || targetUser.email?.split('@')[0] || 'Kullanıcı' });
+    // SECURITY: Do NOT include birthDate or birthTime in the res.json payload.
+    // They are sensitive PII (Personally Identifiable Information). Always cherry-pick fields!
     res.json({
         report,
         user1: { id: currentUser.id, name: currentUser.name || currentUser.email?.split('@')[0], avatar: currentUser.avatar, sunSign: currentUser.sunSign, moonSign: currentUser.moonSign, risingSign: currentUser.risingSign },

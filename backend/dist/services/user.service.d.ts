@@ -27,6 +27,7 @@ export declare class UserService {
             dailyMatchPasses: number;
             xp: number;
             level: number;
+            karma: number;
             createdAt: Date;
             photos: {
                 userId: string;
@@ -87,6 +88,7 @@ export declare class UserService {
             dailyMatchPasses: number;
             xp: number;
             level: number;
+            karma: number;
             createdAt: Date;
             photos: {
                 userId: string;
@@ -153,6 +155,7 @@ export declare class UserService {
                 cosmicStatus: string | null;
                 isPremium: boolean;
                 level: number;
+                karma: number;
             };
             score: number;
             analysis: string;
@@ -200,6 +203,8 @@ export declare class UserService {
             isPremium: boolean;
             dailySwipes: number;
             lastSwipeDate: Date | null;
+            isOnline: boolean;
+            lastSeen: Date | null;
             superLikesLeft: number;
             extraTimeLeft: number;
             twoFactorSecret: string | null;
@@ -211,13 +216,16 @@ export declare class UserService {
             level: number;
             lastDailyTarot: Date | null;
             badges: string;
+            pushToken: string | null;
+            dailyQuestMatches: number;
+            dailyQuestMessages: number;
+            dailyQuestClaimed: boolean;
+            lastQuestReset: Date | null;
+            karma: number;
             createdAt: Date;
             dailyFriendRequests: number;
             lastFriendRequestDate: Date | null;
         };
-    }>;
-    static applyPenalty(userId: string): Promise<{
-        success: boolean;
     }>;
     static updateCosmicStatus(userId: string, cosmicStatus: string | null): Promise<{
         cosmicStatus: string | null;
@@ -230,7 +238,7 @@ export declare class UserService {
         success: boolean;
         reward: number;
         newStreak: number;
-        stardustBalance: number;
+        stardustBalance: number | undefined;
     }>;
     static getLeaderboard(): Promise<{
         leaderboard: {

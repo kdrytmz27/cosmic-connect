@@ -72,10 +72,12 @@ export async function createTestUser(data: typeof TEST_USER, role: string = 'STA
 }
 
 export async function cleanDatabase() {
-    // Delete in correct order to respect foreign keys
-    await prisma.tellerComment.deleteMany();
+    // Delete in correct order to respect foreign keys (Children first)
     await prisma.appointment.deleteMany();
+    await prisma.tellerComment.deleteMany();
     await prisma.fortuneTeller.deleteMany();
+
+    // Other relations dependent on User
     await prisma.tellerApplication.deleteMany();
     await prisma.report.deleteMany();
     await prisma.friendRequest.deleteMany();
@@ -86,5 +88,7 @@ export async function cleanDatabase() {
     await prisma.notification.deleteMany();
     await prisma.blockedUser.deleteMany();
     await prisma.photo.deleteMany();
+
+    // Dependent base entities
     await prisma.user.deleteMany();
 }

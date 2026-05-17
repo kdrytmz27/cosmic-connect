@@ -6,6 +6,7 @@ const socket_controller_1 = require("../controllers/socket.controller");
 const badge_service_1 = require("./badge.service");
 const xp_service_1 = require("./xp.service");
 const constants_1 = require("../config/constants");
+const notification_service_1 = require("./notification.service");
 exports.friendshipService = {
     checkIfFriends: async (userId1, userId2) => {
         const ab = await index_1.prisma.friendship.findFirst({ where: { user1Id: userId1, user2Id: userId2 } });
@@ -77,6 +78,13 @@ exports.friendshipService = {
                         fromUserName: receiverUser?.isPremium ? (senderUser?.name || 'Birisi') : null,
                         isMatch: true
                     });
+                    await notification_service_1.notificationService.createNotification({
+                        userId: receiverId,
+                        type: 'MATCH',
+                        title: 'Yeni Eşleşme!',
+                        content: 'Yıldızlar hizalandı, yeni bir eşleşmen var!',
+                        actionUrl: '/messages'
+                    });
                 }
             }
             const senderPremium = await index_1.prisma.user.findUnique({ where: { id: senderId }, select: { isPremium: true } });
@@ -96,7 +104,8 @@ exports.friendshipService = {
         const requestToIds = myRequests.map(f => f.user2Id);
         const mutualFriends = await index_1.prisma.friendship.findMany({
             where: { user1Id: { in: requestToIds }, user2Id: userId },
-            include: { user1: { select: { id: true, email: true, name: true, avatar: true, sunSign: true, stardustBalance: true } } }
+            // VULN 75 FIX: Removed email from select - email is PII and must never be exposed to other users
+            include: { user1: { select: { id: true, name: true, avatar: true, sunSign: true, stardustBalance: true, isOnline: true, lastSeen: true } } }
         });
         // Batch fetch last messages for ALL friends in ONE query (eliminates N+1)
         const friendIds = mutualFriends.map(f => f.user1.id);
@@ -175,40 +184,47 @@ exports.friendshipService = {
         });
     },
     acceptMatch: async (userId, targetId) => {
-        const recentThreshold = new Date(Date.now() - 30 * 1000);
-        const recentRecord = await index_1.prisma.friendship.findFirst({
+        // Find any existing relationship (SWIPE_MATCH created by socket matchmaking, or prior friendship)
+        const existingRelation = await index_1.prisma.friendship.findFirst({
             where: {
-                OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }],
-                expiresAt: { gt: new Date() },
-                createdAt: { gt: recentThreshold }
+                OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }]
             }
         });
-        if (recentRecord) {
-            const existingAB = await index_1.prisma.friendship.findFirst({ where: { user1Id: userId, user2Id: targetId } });
-            const existingBA = await index_1.prisma.friendship.findFirst({ where: { user1Id: targetId, user2Id: userId } });
-            if (!existingAB)
-                await index_1.prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt: recentRecord.expiresAt, status: 'MATCH' } });
-            if (!existingBA)
-                await index_1.prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt: recentRecord.expiresAt, status: 'MATCH' } });
-            return { success: true, expiresAt: recentRecord.expiresAt.toISOString(), serverTime: Date.now() };
+        // If already a valid active MATCH, return success immediately (idempotent)
+        if (existingRelation?.status === 'MATCH' && existingRelation?.expiresAt && new Date() < existingRelation.expiresAt) {
+            return { success: true, expiresAt: existingRelation.expiresAt.toISOString(), serverTime: Date.now() };
         }
+        // Security: must have a prior relation (SWIPE_MATCH from socket matchmaking OR existing friendship)
+        if (!existingRelation) {
+            throw new Error('Geçersiz İşlem: Eşleşme olmadan zorla kabul sağlanamaz (Force Match Kalkanı).');
+        }
+        // Delete old records, create fresh bidirectional MATCH
         await index_1.prisma.friendship.deleteMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
         const expiresAt = new Date(Date.now() + constants_1.CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
         await index_1.prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' } });
         await index_1.prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' } });
+        // FEAT-08: Increment daily quest matches & FEAT-10: Karma reward
+        await index_1.prisma.user.updateMany({
+            where: { id: userId },
+            data: { dailyQuestMatches: { increment: 1 }, karma: { increment: 5 } }
+        });
         return { success: true, expiresAt: expiresAt.toISOString(), serverTime: Date.now() };
     },
     passMatch: async (userId, targetId) => {
         await index_1.prisma.friendship.deleteMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
-        const updated = await index_1.prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await index_1.prisma.user.updateMany({
+            where: { id: userId, dailyMatchPasses: { gt: 0 } },
             data: { dailyMatchPasses: { decrement: 1 } }
         });
-        return { success: true, dailyMatchPasses: updated.dailyMatchPasses };
+        if (updatedCount.count === 0) {
+            throw new Error('Pas geçme hakkı kalmadı veya yarış durumu engellendi.');
+        }
+        const freshUser = await index_1.prisma.user.findUnique({ where: { id: userId } });
+        return { success: true, dailyMatchPasses: freshUser?.dailyMatchPasses };
     },
     extendMatch: async (userId, targetId) => {
         // Verify balance before deducting
@@ -218,18 +234,23 @@ exports.friendshipService = {
         }
         const newExpiresAt = new Date();
         newExpiresAt.setHours(newExpiresAt.getHours() + constants_1.CONSTANTS.DURATIONS.MATCH_EXTENSION_HOURS);
+        // VULN 54 FIX: Atomic update for balance deduction to prevent Negative Farming
+        const updatedCount = await index_1.prisma.user.updateMany({
+            where: { id: userId, stardustBalance: { gte: constants_1.CONSTANTS.COSTS.EXTEND_MATCH } },
+            data: { stardustBalance: { decrement: constants_1.CONSTANTS.COSTS.EXTEND_MATCH } }
+        });
+        if (updatedCount.count === 0) {
+            throw new Error('Yetersiz Yıldız Tozu veya Hatalı İşlem (Race Condition Engellendi)');
+        }
         await index_1.prisma.friendship.updateMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] },
             data: { expiresAt: newExpiresAt }
         });
-        await index_1.prisma.user.update({
-            where: { id: userId },
-            data: { stardustBalance: { decrement: constants_1.CONSTANTS.COSTS.EXTEND_MATCH } }
-        });
         const io = (0, socket_controller_1.getSocketIo)();
         if (io) {
-            const extender = await index_1.prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
-            const extenderName = extender?.name || extender?.email?.split('@')[0] || 'Birisi';
+            // VULN 76 FIX: Never expose email in socket events
+            const extender = await index_1.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+            const extenderName = extender?.name || 'Kozmik Yolcu';
             io.to(targetId).emit('chatExtended', {
                 extendedBy: userId, extenderName, expiresAt: newExpiresAt.toISOString()
             });
@@ -242,13 +263,17 @@ exports.friendshipService = {
         if (!user || user.stardustBalance < constants_1.CONSTANTS.COSTS.MAKE_MATCH_PERMANENT) {
             throw new Error('Yetersiz Yıldız Tozu');
         }
+        // VULN 54 FIX: Atomic update for balance deduction to prevent Negative Farming
+        const updatedCount = await index_1.prisma.user.updateMany({
+            where: { id: userId, stardustBalance: { gte: constants_1.CONSTANTS.COSTS.MAKE_MATCH_PERMANENT } },
+            data: { stardustBalance: { decrement: constants_1.CONSTANTS.COSTS.MAKE_MATCH_PERMANENT } }
+        });
+        if (updatedCount.count === 0) {
+            throw new Error('Yetersiz Yıldız Tozu veya Hatalı İşlem (Race Condition Engellendi)');
+        }
         await index_1.prisma.friendship.updateMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] },
             data: { expiresAt: null }
-        });
-        await index_1.prisma.user.update({
-            where: { id: userId },
-            data: { stardustBalance: { decrement: constants_1.CONSTANTS.COSTS.MAKE_MATCH_PERMANENT } }
         });
         return { success: true };
     },
@@ -257,10 +282,20 @@ exports.friendshipService = {
         if (areFriends)
             throw new Error('Zaten arkadaşsınız');
         const existing = await index_1.prisma.friendRequest.findFirst({
-            where: { senderId: userId, receiverId, status: 'PENDING' }
+            where: { senderId: userId, receiverId }
         });
-        if (existing)
-            throw new Error('Zaten bekleyen bir isteğiniz var');
+        if (existing) {
+            if (existing.status === 'PENDING')
+                throw new Error('Zaten bekleyen bir isteğiniz var');
+            if (existing.status === 'REJECTED') {
+                const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                if (existing.createdAt > oneDayAgo)
+                    throw new Error('Bu kullanıcı isteğinizi kısa süre önce reddetti. Tekrar yollamak için beklemelisiniz.');
+                await index_1.prisma.friendRequest.update({ where: { id: existing.id }, data: { status: 'PENDING', createdAt: new Date() } });
+                await exports.friendshipService.incrementDailyFriendRequest(userId);
+                return { success: true };
+            }
+        }
         const reverseRequest = await index_1.prisma.friendRequest.findFirst({
             where: { senderId: receiverId, receiverId: userId, status: 'PENDING' }
         });
@@ -284,6 +319,14 @@ exports.friendshipService = {
                 requestId: fr.id, fromUserId: userId, fromUserName: senderUser?.name || 'Birisi',
                 fromAvatar: senderUser?.avatar, fromSunSign: senderUser?.sunSign
             });
+            await notification_service_1.notificationService.createNotification({
+                userId: receiverId,
+                type: 'FRIEND_REQUEST',
+                title: 'Yeni Arkadaşlık İsteği',
+                content: `${senderUser?.name || 'Birisi'} sana arkadaşlık isteği gönderdi.`,
+                actionUrl: '/messages',
+                entityId: fr.id
+            });
         }
         return { success: true };
     },
@@ -306,6 +349,14 @@ exports.friendshipService = {
         if (io) {
             const accepter = await index_1.prisma.user.findUnique({ where: { id: userId }, select: { name: true, avatar: true } });
             io.to(fr.senderId).emit('friendRequestAccepted', { fromUserId: userId, fromUserName: accepter?.name || 'Birisi' });
+            await notification_service_1.notificationService.createNotification({
+                userId: fr.senderId,
+                type: 'FRIEND_REQUEST_ACCEPTED',
+                title: 'İsteğin Kabul Edildi',
+                content: `${accepter?.name || 'Birisi'} arkadaşlık isteğini kabul etti!`,
+                actionUrl: '/messages',
+                entityId: requestId
+            });
         }
     },
     rejectFriendRequest: async (userId, requestId) => {

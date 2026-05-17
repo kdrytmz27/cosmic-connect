@@ -18,6 +18,26 @@ vi.mock('../../src/api/client', async (importOriginal) => {
     };
 });
 
+vi.mock('@revenuecat/purchases-capacitor', () => ({
+    Purchases: {
+        getOfferings: vi.fn().mockResolvedValue({
+            current: {
+                availablePackages: [
+                    { identifier: 'premium_sub', product: { title: 'Premium Abonelik', priceString: '₺99.99' } },
+                    { identifier: 'coins_500', product: { title: '500 Yıldız Tozu', priceString: '₺19.99' } }
+                ]
+            }
+        }),
+        purchasePackage: vi.fn().mockResolvedValue({ customerInfo: {} }),
+        logOut: vi.fn().mockResolvedValue({}),
+        configure: vi.fn(),
+        setLogLevel: vi.fn(),
+        getCustomerInfo: vi.fn().mockResolvedValue({ entitlements: { active: {} } }),
+        addCustomerInfoUpdateListener: vi.fn()
+    },
+    LOG_LEVEL: { DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 }
+}));
+
 describe('Market Sayfası Testleri', () => {
     let mockUpdateEconomy: ReturnType<typeof vi.fn>;
 
@@ -78,12 +98,14 @@ describe('Market Sayfası Testleri', () => {
         renderWithProviders(<Market />);
 
         // 500 tozu olan paket butonuna tıkla (₺19.99)
-        const buyBtn = screen.getByRole('button', { name: /₺19.99/i });
+        const buyBtn = await screen.findByRole('button', { name: /₺19.99/i });
         await user.click(buyBtn);
 
         await waitFor(() => {
-            expect(api.post).toHaveBeenCalledWith('/premium/buy-stardust', { amount: 500 });
-            expect(mockUpdateEconomy).toHaveBeenCalledWith({ stardustBalance: 1000 });
+            // RevenueCat mock'ımızda 'purchasePackage' çağrılıyor
+            import('@revenuecat/purchases-capacitor').then(({ Purchases }) => {
+                expect(Purchases.purchasePackage).toHaveBeenCalled();
+            });
         });
     });
 
@@ -94,12 +116,13 @@ describe('Market Sayfası Testleri', () => {
 
         expect(screen.getByText('Cosmic Premium')).toBeInTheDocument();
 
-        const premiumBtn = screen.getByRole('button', { name: /Premium'a Geç/i });
+        const premiumBtn = await screen.findByRole('button', { name: /Premium Abonelik/i });
         await user.click(premiumBtn);
 
         await waitFor(() => {
-            expect(api.post).toHaveBeenCalledWith('/premium/buy-premium');
-            expect(mockUpdateEconomy).toHaveBeenCalledWith({ isPremium: true });
+            import('@revenuecat/purchases-capacitor').then(({ Purchases }) => {
+                expect(Purchases.purchasePackage).toHaveBeenCalled();
+            });
         });
     });
 

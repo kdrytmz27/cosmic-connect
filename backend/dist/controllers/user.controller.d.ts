@@ -6,7 +6,6 @@ export declare const getLeaderboard: (req: Request, res: Response) => Promise<vo
 export declare const getDailyRewardStatus: (req: Request, res: Response) => Promise<void>;
 export declare const claimDailyReward: (req: Request, res: Response) => Promise<void>;
 export declare const updateCosmicStatus: (req: Request, res: Response) => Promise<void>;
-export declare const applyPenalty: (req: Request, res: Response) => Promise<void>;
 export declare const reportUser: (req: Request, res: Response) => Promise<void>;
 export declare const getSynastry: (req: Request, res: Response) => Promise<void>;
 export declare const addFriend: (req: Request, res: Response) => Promise<void>;

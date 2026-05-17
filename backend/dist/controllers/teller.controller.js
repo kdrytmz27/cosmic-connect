@@ -4,6 +4,7 @@ exports.uploadFortuneImage = exports.getTellerComments = exports.addTellerCommen
 const index_1 = require("../index");
 const slot_service_1 = require("../services/slot.service");
 const logger_1 = require("../utils/logger");
+const UserRole_1 = require("../enums/UserRole");
 const listTellers = async (req, res) => {
     try {
         const tellers = await index_1.prisma.fortuneTeller.findMany({
@@ -52,12 +53,16 @@ const bookAppointment = async (req, res) => {
         const existingOut = await index_1.prisma.friendship.findFirst({
             where: { user1Id: targetTeller.userId, user2Id: userId }
         });
-        const txTasks = [
-            index_1.prisma.user.update({
-                where: { id: userId },
+        // Transactions ensure we take stardust AND book the appointment safely using atomic updateMany
+        const txResults = await index_1.prisma.$transaction(async (tx) => {
+            const updateCount = await tx.user.updateMany({
+                where: { id: userId, stardustBalance: { gte: APPOINTMENT_COST } },
                 data: { stardustBalance: { decrement: APPOINTMENT_COST } }
-            }),
-            index_1.prisma.appointment.create({
+            });
+            if (updateCount.count === 0) {
+                throw new Error('Not enough stardust (Güvenlik Kalkanı: Race Condition Engellendi)');
+            }
+            const appt = await tx.appointment.create({
                 data: {
                     userId,
                     tellerId,
@@ -68,17 +73,16 @@ const bookAppointment = async (req, res) => {
                     fortuneType: fortuneType || 'TAROT',
                     imageUrl: imageUrl || null
                 }
-            })
-        ];
-        if (!existingIn) {
-            txTasks.push(index_1.prisma.friendship.create({ data: { user1Id: userId, user2Id: targetTeller.userId } }));
-        }
-        if (!existingOut && userId !== targetTeller.userId) {
-            txTasks.push(index_1.prisma.friendship.create({ data: { user1Id: targetTeller.userId, user2Id: userId } }));
-        }
-        // Transactions ensure we take stardust AND book the appointment safely
-        const txResults = await index_1.prisma.$transaction(txTasks);
-        logger_1.logger.debug('[bookAppointment] Transaction successful. Created appointment:', { appointment: txResults[1] });
+            });
+            if (!existingIn) {
+                await tx.friendship.create({ data: { user1Id: userId, user2Id: targetTeller.userId } });
+            }
+            if (!existingOut && userId !== targetTeller.userId) {
+                await tx.friendship.create({ data: { user1Id: targetTeller.userId, user2Id: userId } });
+            }
+            return appt;
+        });
+        logger_1.logger.debug('[bookAppointment] Transaction successful. Created appointment:', { appointment: txResults });
         res.json({ message: 'Appointment booked successfully', cost: APPOINTMENT_COST });
     }
     catch (error) {
@@ -99,21 +103,33 @@ const claimDailyStardust = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        // Check if already claimed today to prevent unlimited farming
-        const today = new Date().toISOString().split('T')[0];
-        const lastClaim = user.lastDailyReward ? new Date(user.lastDailyReward).toISOString().split('T')[0] : null;
+        // VULN 52 FIX: Timezone Desync fixed by using +3 UTC offset for standard local reset mapping
+        const trOffset = 3 * 60 * 60 * 1000;
+        const now = new Date();
+        const trNow = new Date(now.getTime() + trOffset);
+        const today = trNow.toISOString().split('T')[0];
+        let lastClaim = null;
+        if (user.lastDailyReward) {
+            const lr = new Date(user.lastDailyReward.getTime() + trOffset);
+            lastClaim = lr.toISOString().split('T')[0];
+        }
         if (lastClaim === today) {
             res.status(400).json({ error: 'Bugün zaten günlük stardust aldınız!' });
             return;
         }
-        const updated = await index_1.prisma.user.update({
-            where: { id: userId },
+        const updateCount = await index_1.prisma.user.updateMany({
+            where: { id: userId, lastDailyReward: user.lastDailyReward },
             data: {
                 stardustBalance: { increment: 50 },
                 lastDailyReward: new Date()
             }
         });
-        res.json({ message: 'Stardust claimed!', newBalance: updated.stardustBalance });
+        if (updateCount.count === 0) {
+            res.status(400).json({ error: 'Ödül çoktan alınmış (Race Condition Lock).' });
+            return;
+        }
+        const updated = await index_1.prisma.user.findUnique({ where: { id: userId } });
+        res.json({ message: 'Stardust claimed!', newBalance: updated?.stardustBalance });
     }
     catch (e) {
         res.status(500).json({ error: 'Server error' });
@@ -189,17 +205,26 @@ const interpretFortune = async (req, res) => {
             res.status(404).json({ error: 'Fortune not found or not yours' });
             return;
         }
-        const [updated] = await index_1.prisma.$transaction([
-            index_1.prisma.appointment.update({
-                where: { id: appointmentId },
-                data: { status: 'COMPLETED', interpretation }
-            }),
-            index_1.prisma.user.update({
-                where: { id: userId },
-                data: { stardustBalance: { increment: appointment.stardustPrice } }
-            })
-        ]);
-        res.json({ message: 'Fortune interpreted successfully', appointmentId: updated.id, status: updated.status });
+        // VULN 53 FIX: Minimum interpretation limit to block fraud (empty/single word interpretations)
+        if (!interpretation || interpretation.trim().length < 50) {
+            res.status(400).json({ error: 'Yorumunuz çok kısa. Lütfen detaylı bir fal yorumu yazınız. (Min. 50 harf)' });
+            return;
+        }
+        // Ensure atomic update, only update if PENDING to prevent infinite money glitch
+        const updatedCount = await index_1.prisma.appointment.updateMany({
+            where: { id: appointmentId, status: 'PENDING' },
+            data: { status: 'COMPLETED', interpretation }
+        });
+        if (updatedCount.count === 0) {
+            res.status(400).json({ error: 'Bu fal zaten yorumlanmış!' });
+            return;
+        }
+        // Only credit the teller IF the appointment was actually updated from PENDING to COMPLETED
+        await index_1.prisma.user.update({
+            where: { id: userId },
+            data: { stardustBalance: { increment: appointment.stardustPrice } }
+        });
+        res.json({ message: 'Fortune interpreted successfully', appointmentId, status: 'COMPLETED' });
     }
     catch (e) {
         res.status(500).json({ error: 'Server error' });
@@ -228,7 +253,7 @@ exports.getMyFortunes = getMyFortunes;
 const rateTeller = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { appointmentId, rating } = req.body;
+        const { appointmentId, rating, comment } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -247,19 +272,33 @@ const rateTeller = async (req, res) => {
             return;
         }
         const tellerId = appointment.tellerId;
-        const teller = appointment.teller;
-        const newReviewCount = teller.reviewCount + 1;
-        const newRating = ((teller.rating * teller.reviewCount) + rating) / newReviewCount;
-        await index_1.prisma.$transaction([
-            index_1.prisma.appointment.update({
-                where: { id: appointmentId },
+        await index_1.prisma.$transaction(async (tx) => {
+            const updateCount = await tx.appointment.updateMany({
+                where: { id: appointmentId, userRating: null, status: 'COMPLETED' },
                 data: { userRating: rating }
-            }),
-            index_1.prisma.fortuneTeller.update({
+            });
+            if (updateCount.count === 0) {
+                throw new Error('Fal çoktan oylanmış (Spam Koruması)');
+            }
+            // VULN 55 FIX: Memory-Overwrite Race Condition fixed using database-level aggregate inside transaction lock
+            const agg = await tx.appointment.aggregate({
+                where: { tellerId, userRating: { not: null } },
+                _avg: { userRating: true },
+                _count: { userRating: true }
+            });
+            await tx.fortuneTeller.update({
                 where: { id: tellerId },
-                data: { reviewCount: newReviewCount, rating: newRating }
-            })
-        ]);
+                data: {
+                    reviewCount: agg._count.userRating || 1,
+                    rating: agg._avg.userRating || rating
+                }
+            });
+            if (comment && comment.trim() !== '') {
+                await tx.tellerComment.create({
+                    data: { tellerId, userId, comment: comment.trim() }
+                });
+            }
+        });
         res.json({ message: 'Rated successfully' });
     }
     catch (e) {
@@ -279,7 +318,7 @@ const applyTeller = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        if (user.role === 'FORTUNE_TELLER') {
+        if (user.role === UserRole_1.UserRole.FORTUNE_TELLER) {
             res.status(400).json({ error: 'You are already a fortune teller' });
             return;
         }
@@ -333,7 +372,7 @@ const approveApplication = async (req, res) => {
     try {
         // Verify caller is Admin to prevent unauthorized privilege escalation
         const callerRole = req.user?.role;
-        if (callerRole !== 'ADMIN') {
+        if (callerRole !== UserRole_1.UserRole.ADMIN) {
             res.status(403).json({ error: 'Only admins can approve applications' });
             return;
         }
@@ -350,7 +389,7 @@ const approveApplication = async (req, res) => {
         if (status === 'APPROVED') {
             await index_1.prisma.$transaction([
                 index_1.prisma.tellerApplication.update({ where: { id: applicationId }, data: { status: 'APPROVED' } }),
-                index_1.prisma.user.update({ where: { id: application.userId }, data: { role: 'FORTUNE_TELLER' } }),
+                index_1.prisma.user.update({ where: { id: application.userId }, data: { role: UserRole_1.UserRole.FORTUNE_TELLER } }),
                 index_1.prisma.fortuneTeller.upsert({
                     where: { userId: application.userId },
                     update: { fortuneTypes: application.fortuneTypes },

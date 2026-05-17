@@ -1,1 +1,1 @@
-{"version":3,"file":"admin.finance.controller.d.ts","sourceRoot":"","sources":["../../src/controllers/admin.finance.controller.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAG5C,eAAO,MAAM,mBAAmB,GAAU,KAAK,OAAO,EAAE,KAAK,QAAQ,kBA6CpE,CAAC"}
+{"version":3,"file":"admin.finance.controller.d.ts","sourceRoot":"","sources":["../../src/controllers/admin.finance.controller.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAG5C,eAAO,MAAM,mBAAmB,GAAU,KAAK,OAAO,EAAE,KAAK,QAAQ,kBA+CpE,CAAC"}

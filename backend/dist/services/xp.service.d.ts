@@ -28,6 +28,8 @@ export declare const xpService: {
         isPremium: boolean;
         dailySwipes: number;
         lastSwipeDate: Date | null;
+        isOnline: boolean;
+        lastSeen: Date | null;
         superLikesLeft: number;
         extraTimeLeft: number;
         twoFactorSecret: string | null;
@@ -39,6 +41,12 @@ export declare const xpService: {
         level: number;
         lastDailyTarot: Date | null;
         badges: string;
+        pushToken: string | null;
+        dailyQuestMatches: number;
+        dailyQuestMessages: number;
+        dailyQuestClaimed: boolean;
+        lastQuestReset: Date | null;
+        karma: number;
         createdAt: Date;
         dailyFriendRequests: number;
         lastFriendRequestDate: Date | null;

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verify2FA = exports.setup2FA = exports.login = exports.register = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const UserRole_1 = require("../enums/UserRole");
 const speakeasy_1 = __importDefault(require("speakeasy"));
 const qrcode_1 = __importDefault(require("qrcode"));
 const index_1 = require("../index");
@@ -28,13 +29,24 @@ const register = async (req, res) => {
         if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
             return res.status(400).json({ error: 'Password must contain uppercase, lowercase, and a number' });
         }
-        const existingUser = await index_1.prisma.user.findUnique({ where: { email } });
+        const normalizedEmail = email.toLowerCase();
+        const existingUser = await index_1.prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existingUser) {
             return res.status(400).json({ error: 'User already exists' });
         }
         const bDate = new Date(birthDate);
         if (isNaN(bDate.getTime())) {
             return res.status(400).json({ error: 'Invalid birthDate' });
+        }
+        // VULN 49 FIX: COPPA / Dating Rules Minimum Age (18) Validation Bypass
+        const today = new Date();
+        let age = today.getFullYear() - bDate.getFullYear();
+        const m = today.getMonth() - bDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < bDate.getDate())) {
+            age--;
+        }
+        if (age < 18) {
+            return res.status(403).json({ error: 'Güvenlik İhlali: Uygulamaya kayıt olmak için reşit (>18) olmalısınız. (Uluslararası sözleşme koruması)' });
         }
         const year = bDate.getUTCFullYear();
         const month = bDate.getUTCMonth() + 1;
@@ -43,10 +55,10 @@ const register = async (req, res) => {
         const moonSign = (0, astrology_1.calculateMoonSign)(year, month, day);
         const risingSign = (0, astrology_1.calculateRisingSign)(birthTime, sunSign);
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
-        const role = 'STANDARD'; // Enforce STANDARD role for all new users to prevent Privilege Escalation
+        const role = UserRole_1.UserRole.STANDARD; // Enforce STANDARD role for all new users to prevent Privilege Escalation
         const newUser = await index_1.prisma.user.create({
             data: {
-                email,
+                email: normalizedEmail,
                 passwordHash,
                 birthDate: bDate,
                 birthTime,
@@ -85,7 +97,8 @@ const login = async (req, res) => {
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password required' });
         }
-        const user = await index_1.prisma.user.findUnique({ where: { email } });
+        const normalizedEmail = email.toLowerCase();
+        const user = await index_1.prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -135,6 +148,9 @@ const setup2FA = async (req, res) => {
         const user = await index_1.prisma.user.findUnique({ where: { id: userId } });
         if (!user)
             return res.status(404).json({ error: 'User not found' });
+        if (user.isTwoFactorEnabled) {
+            return res.status(403).json({ error: 'Güvenlik İhlali (2FA Overwrite): Mevcut olan korumayı silip yenisini kuramazsınız!' });
+        }
         const secret = speakeasy_1.default.generateSecret({ name: `CosmicConnect (${user.email})` });
         await index_1.prisma.user.update({
             where: { id: userId },

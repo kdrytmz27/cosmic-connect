@@ -62,10 +62,14 @@ class SlotMachineManager {
             return;
         for (const bet of this.bets) {
             let win = false;
+            let push = false;
+            // VULN 60 FIX: sum === 14 is a PUSH (tie) - no one wins or loses
             if (bet.betType === 'BIG' && sum > 14)
                 win = true;
             if (bet.betType === 'SMALL' && sum < 14)
                 win = true;
+            if (sum === 14)
+                push = true;
             try {
                 if (win) {
                     const payout = bet.betAmount * 2;
@@ -74,6 +78,14 @@ class SlotMachineManager {
                         data: { stardustBalance: { increment: payout } }
                     });
                     this.io?.to(bet.userId).emit('slot:result', { win: true, payout, newBalance: dbUser.stardustBalance });
+                }
+                else if (push) {
+                    // VULN 60 FIX: Refund bet on push (tie at sum=14)
+                    const dbUser = await index_1.prisma.user.update({
+                        where: { id: bet.userId },
+                        data: { stardustBalance: { increment: bet.betAmount } }
+                    });
+                    this.io?.to(bet.userId).emit('slot:result', { win: false, push: true, refund: bet.betAmount, newBalance: dbUser.stardustBalance });
                 }
                 else {
                     const dbUser = await index_1.prisma.user.findUnique({ where: { id: bet.userId } });
@@ -103,12 +115,25 @@ class SlotMachineManager {
         if (!user || user.stardustBalance < betAmount) {
             throw new Error('Yetersiz Yıldız Tozu');
         }
-        const updated = await index_1.prisma.user.update({
-            where: { id: userId },
+        const updatedCount = await index_1.prisma.user.updateMany({
+            where: { id: userId, stardustBalance: { gte: betAmount } },
             data: { stardustBalance: { decrement: betAmount } }
         });
+        if (updatedCount.count === 0) {
+            throw new Error('Yetersiz bakiye (Race Condition Engellendi)');
+        }
+        // VULN 59 FIX: Double-check duplicate bet AFTER acquiring balance lock to prevent TOCTOU race
+        if (this.bets.find(b => b.userId === userId)) {
+            // Refund the deducted balance since we won't place the bet
+            await index_1.prisma.user.updateMany({
+                where: { id: userId },
+                data: { stardustBalance: { increment: betAmount } }
+            });
+            throw new Error('Bu tur için zaten bahis yaptınız (Race Condition Guard).');
+        }
+        const updated = await index_1.prisma.user.findUnique({ where: { id: userId } });
         this.bets.push({ userId, betAmount, betType });
-        return { success: true, newBalance: updated.stardustBalance };
+        return { success: true, newBalance: updated?.stardustBalance || 0 };
     }
     getCurrentState(userId) {
         const userBet = userId ? this.bets.find(b => b.userId === userId) : null;

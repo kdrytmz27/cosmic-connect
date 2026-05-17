@@ -35,3 +35,17 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 // Mock scrollIntoView (not implemented in jsdom)
 Element.prototype.scrollIntoView = vi.fn();
+
+// Global RevenueCat Mock for testing environment
+vi.mock('@revenuecat/purchases-capacitor', () => ({
+    Purchases: {
+        setLogLevel: vi.fn(),
+        configure: vi.fn(),
+        getOfferings: vi.fn().mockResolvedValue({ current: { availablePackages: [] } }),
+        purchasePackage: vi.fn().mockResolvedValue({ customerInfo: {} }),
+        getCustomerInfo: vi.fn().mockResolvedValue({ entitlements: { active: {} } }),
+        addCustomerInfoUpdateListener: vi.fn(),
+        logOut: vi.fn().mockResolvedValue({})
+    },
+    LOG_LEVEL: { DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 }
+}));

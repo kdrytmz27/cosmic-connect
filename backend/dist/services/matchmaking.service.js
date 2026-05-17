@@ -35,6 +35,43 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.matchmakingService = void 0;
 const logger_1 = require("../utils/logger");
+const UserRole_1 = require("../enums/UserRole");
+const index_1 = require("../index");
+// FEAT-05: Zodiac compatibility scoring for matchmaking
+const FIRE = ['Aries', 'Leo', 'Sagittarius', 'Koç', 'Aslan', 'Yay'];
+const EARTH = ['Taurus', 'Virgo', 'Capricorn', 'Boğa', 'Başak', 'Oğlak'];
+const AIR = ['Gemini', 'Libra', 'Aquarius', 'İkizler', 'Terazi', 'Kova'];
+const WATER = ['Cancer', 'Scorpio', 'Pisces', 'Yengeç', 'Akrep', 'Balık'];
+function getElement(sign) {
+    if (!sign)
+        return null;
+    const lowerSign = sign.toLowerCase();
+    // VULN 46 FIX: Zodiac Case Sensitivity (Case-Insensitive matching)
+    if (FIRE.some(s => s.toLowerCase() === lowerSign))
+        return 'FIRE';
+    if (EARTH.some(s => s.toLowerCase() === lowerSign))
+        return 'EARTH';
+    if (AIR.some(s => s.toLowerCase() === lowerSign))
+        return 'AIR';
+    if (WATER.some(s => s.toLowerCase() === lowerSign))
+        return 'WATER';
+    return null;
+}
+// Returns 0 (neutral), 20 (compatible), or 30 (highly compatible) bonus points
+function getZodiacCompatBonus(sign1, sign2) {
+    const e1 = getElement(sign1);
+    const e2 = getElement(sign2);
+    if (!e1 || !e2)
+        return 0;
+    if (e1 === e2)
+        return 20; // Same element: very compatible
+    // Fire <-> Air and Water <-> Earth are complementary
+    if ((e1 === 'FIRE' && e2 === 'AIR') || (e1 === 'AIR' && e2 === 'FIRE'))
+        return 30;
+    if ((e1 === 'WATER' && e2 === 'EARTH') || (e1 === 'EARTH' && e2 === 'WATER'))
+        return 30;
+    return 0; // Incompatible: neutral, use default threshold
+}
 const queue = [];
 const rooms = new Map();
 exports.matchmakingService = {
@@ -47,7 +84,7 @@ exports.matchmakingService = {
         // Additional safety check: Ensure user is not a teller
         const { prisma } = await Promise.resolve().then(() => __importStar(require('../index')));
         const user = await prisma.user.findUnique({ where: { id: player.userId } });
-        if (user?.role === 'FORTUNE_TELLER') {
+        if (user?.role === UserRole_1.UserRole.FORTUNE_TELLER) {
             logger_1.logger.debug(`[Matchmaking] User ${player.userId} is a teller. Rejecting queue entry.`);
             return;
         }
@@ -63,18 +100,28 @@ exports.matchmakingService = {
     },
     async tryMatch() {
         logger_1.logger.debug(`[Matchmaking] tryMatch called. Queue size: ${queue.length}`, { queue: queue.map(p => ({ userId: p.userId, score: p.matchScore })) });
+        const matchedPairs = [];
         if (queue.length >= 2) {
             const { prisma } = await Promise.resolve().then(() => __importStar(require('../index')));
-            for (let i = 0; i < queue.length; i++) {
+            let i = 0;
+            while (i < queue.length) {
+                let matched = false;
                 for (let j = i + 1; j < queue.length; j++) {
                     const p1 = queue[i];
                     const p2 = queue[j];
                     if (!p1 || !p2)
                         continue;
                     const scoreDiff = Math.abs(p1.matchScore - p2.matchScore);
-                    logger_1.logger.debug(`[Matchmaking] Comparing ${p1.userId} (score:${p1.matchScore}) vs ${p2.userId} (score:${p2.matchScore}) diff:${scoreDiff}`);
-                    if (scoreDiff <= 20) {
-                        // Check if these two users already have a relationship (friend, match, or swipe match)
+                    const compatBonus = getZodiacCompatBonus(p1.sunSign, p2.sunSign);
+                    const k1 = p1.karma ?? 100;
+                    const k2 = p2.karma ?? 100;
+                    let karmaBonus = 0;
+                    if (k1 >= 120 && k2 >= 120)
+                        karmaBonus = 15;
+                    else if (k1 < 50 || k2 < 50)
+                        karmaBonus = -10;
+                    const effectiveThreshold = 20 + compatBonus + karmaBonus;
+                    if (scoreDiff <= effectiveThreshold) {
                         const existingRelation = await prisma.friendship.findFirst({
                             where: {
                                 OR: [
@@ -84,19 +131,22 @@ exports.matchmakingService = {
                             }
                         });
                         if (existingRelation) {
-                            logger_1.logger.debug(`[Matchmaking] SKIP: ${p1.userId} <-> ${p2.userId} already have relationship (${existingRelation.status})`);
-                            continue; // Skip this pair, try others
+                            continue;
                         }
+                        matchedPairs.push([p1, p2]);
                         queue.splice(j, 1);
                         queue.splice(i, 1);
-                        logger_1.logger.info(`[Matchmaking] MATCH FOUND! ${p1.userId} <-> ${p2.userId}`);
-                        return [p1, p2];
+                        matched = true;
+                        logger_1.logger.info(`[Matchmaking] MATCH FOUND! ${p1.userId} <-> ${p2.userId} (compat bonus: ${compatBonus})`);
+                        break;
                     }
                 }
+                if (!matched) {
+                    i++;
+                }
             }
-            // If queue length is large but no strict matches, could relax constraint here
         }
-        return null;
+        return matchedPairs;
     },
     async createRoom(p1, p2, timeoutCallback) {
         const roomId = `room_${Date.now()}_${p1.userId}_${p2.userId}`;
@@ -113,6 +163,20 @@ exports.matchmakingService = {
             extraTimeRequests: new Set(),
             timeoutCallback
         });
+        // VULN 35 FIX COMPATIBILITY: We must insert a temporary SWIPE_MATCH record so that
+        // the "Force Match Protection" in friendship.service.ts acceptMatch doesn't block legitimate matchmaking socket matches!
+        try {
+            await index_1.prisma.friendship.create({
+                data: {
+                    user1Id: p1.userId,
+                    user2Id: p2.userId,
+                    status: 'SWIPE_MATCH'
+                }
+            });
+        }
+        catch (e) {
+            // Might already exist due to quick re-queue, ignore
+        }
         return { roomId, duration };
     },
     getRoom(roomId) {
@@ -136,6 +200,19 @@ exports.matchmakingService = {
         if (room && room.timeoutId)
             clearTimeout(room.timeoutId);
         rooms.delete(`room:${roomId}`);
+        try {
+            const { getSocketIo } = await Promise.resolve().then(() => __importStar(require('../controllers/socket.controller')));
+            const io = getSocketIo();
+            if (io) {
+                // Force user client to close chat UI
+                io.to(roomId).emit('chatEnded', { message: 'Süre doldu, kozmik bağlantı koptu.' });
+                // EVICT ALL: Prevent eavesdropping/hacked messages
+                io.socketsLeave(roomId);
+            }
+        }
+        catch (e) {
+            logger_1.logger.error(`[Socket] Error leaving room ${roomId}:`, e);
+        }
     }
 };
 //# sourceMappingURL=matchmaking.service.js.map

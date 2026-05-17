@@ -69,6 +69,8 @@ export declare function createTestUser(data: typeof TEST_USER, role?: string, st
     isPremium: boolean;
     dailySwipes: number;
     lastSwipeDate: Date | null;
+    isOnline: boolean;
+    lastSeen: Date | null;
     superLikesLeft: number;
     extraTimeLeft: number;
     twoFactorSecret: string | null;
@@ -80,6 +82,12 @@ export declare function createTestUser(data: typeof TEST_USER, role?: string, st
     level: number;
     lastDailyTarot: Date | null;
     badges: string;
+    pushToken: string | null;
+    dailyQuestMatches: number;
+    dailyQuestMessages: number;
+    dailyQuestClaimed: boolean;
+    lastQuestReset: Date | null;
+    karma: number;
     createdAt: Date;
     dailyFriendRequests: number;
     lastFriendRequestDate: Date | null;

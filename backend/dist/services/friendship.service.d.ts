@@ -27,7 +27,7 @@ export declare const friendshipService: {
     }>;
     passMatch: (userId: string, targetId: string) => Promise<{
         success: boolean;
-        dailyMatchPasses: number;
+        dailyMatchPasses: number | undefined;
     }>;
     extendMatch: (userId: string, targetId: string) => Promise<{
         success: boolean;
@@ -39,10 +39,10 @@ export declare const friendshipService: {
     }>;
     sendFriendRequest: (userId: string, receiverId: string) => Promise<{
         success: boolean;
-        autoAccepted: boolean;
+        autoAccepted?: never;
     } | {
         success: boolean;
-        autoAccepted?: never;
+        autoAccepted: boolean;
     }>;
     acceptFriendRequest: (userId: string, requestId: string) => Promise<void>;
     rejectFriendRequest: (userId: string, requestId: string) => Promise<{

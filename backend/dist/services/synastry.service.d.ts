@@ -43,17 +43,25 @@ export declare function calculateSynastryReport(user1: {
     birthDate: Date;
     birthTime: string;
     name?: string;
+    moonSign?: string;
+    risingSign?: string;
 }, user2: {
     birthDate: Date;
     birthTime: string;
     name?: string;
+    moonSign?: string;
+    risingSign?: string;
 }): SynastryReport;
 export declare function calculateQuickSynastryScore(user1: {
-    birthDate: Date;
-    birthTime: string;
+    birthDate?: Date | null;
+    birthTime?: string | null;
+    moonSign?: string | null;
+    risingSign?: string | null;
 }, user2: {
-    birthDate: Date;
-    birthTime: string;
+    birthDate?: Date | null;
+    birthTime?: string | null;
+    moonSign?: string | null;
+    risingSign?: string | null;
 }): {
     score: number;
     message: string;

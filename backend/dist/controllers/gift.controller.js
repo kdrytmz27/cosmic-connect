@@ -19,19 +19,37 @@ const sendGift = async (req, res) => {
         if (userId === receiverId) {
             return res.status(400).json({ error: 'Kendine hediye gönderemezsin' });
         }
+        // VULN 43 FIX: Block Harassment Bypass
+        const isBlocked = await index_1.prisma.blockedUser.findFirst({
+            where: {
+                OR: [
+                    { blockerId: userId, blockedId: receiverId },
+                    { blockerId: receiverId, blockedId: userId }
+                ]
+            }
+        });
+        if (isBlocked) {
+            return res.status(403).json({ error: 'Güvenlik Protokolü: Bu kullanıcının tarafınıza / tarafınızdan bloklu olduğu tespit edildi. Hediye gönderilemez.' });
+        }
         const giftDef = Object.values(exports.GIFTS).find(g => g.id === giftType);
         if (!giftDef)
             return res.status(400).json({ error: 'Geçersiz hediye tipi' });
         // Use transaction to prevent Race Condition / Double-Spend
         const result = await index_1.prisma.$transaction(async (tx) => {
-            const sender = await tx.user.findUnique({ where: { id: userId } });
-            if (!sender || sender.stardustBalance < giftDef.cost) {
-                throw new Error('Yetersiz Yıldız Tozu');
-            }
-            const updatedSender = await tx.user.update({
-                where: { id: userId },
+            // "gte" atomik denetimi sayesinde bir başkası araya girip bakiyeyi hızlıca çekse bile eksiye düşürmez.
+            const updateResult = await tx.user.updateMany({
+                where: {
+                    id: userId,
+                    stardustBalance: { gte: giftDef.cost }
+                },
                 data: { stardustBalance: { decrement: giftDef.cost } }
             });
+            if (updateResult.count === 0) {
+                throw new Error('Yetersiz Yıldız Tozu veya Aynı Anda Çok Fazla İstek (Guard)');
+            }
+            const updatedSender = await tx.user.findUnique({ where: { id: userId } });
+            if (!updatedSender)
+                throw new Error('Kullanıcı bulunamadı');
             await tx.user.update({
                 where: { id: receiverId },
                 data: { stardustBalance: { increment: Math.floor(giftDef.cost / 2) } }

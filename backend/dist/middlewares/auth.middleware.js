@@ -2,7 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAdmin = exports.authenticate = void 0;
 const jwt_1 = require("../utils/jwt");
-const authenticate = (req, res, next) => {
+const index_1 = require("../index");
+const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Unauthorized: No token provided' });
@@ -13,6 +14,20 @@ const authenticate = (req, res, next) => {
     const decoded = (0, jwt_1.verifyToken)(token);
     if (!decoded) {
         return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+    try {
+        const dbUser = await index_1.prisma.user.findUnique({ where: { id: decoded.userId } });
+        if (!dbUser) {
+            return res.status(401).json({ error: 'Unauthorized: User not found' });
+        }
+        if (dbUser.role === 'BANNED') {
+            return res.status(403).json({ error: 'Forbidden: Account is banned' });
+        }
+        // FIX 39: Prevent Stale Token Privilege Escalation! Sync DB role to memory.
+        decoded.role = dbUser.role;
+    }
+    catch (e) {
+        return res.status(500).json({ error: 'Internal server error' });
     }
     req.user = decoded;
     next();

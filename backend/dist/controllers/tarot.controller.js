@@ -10,12 +10,17 @@ const getDailyTarotStatus = async (req, res) => {
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // VULN 65 FIX: Use TR UTC+3 offset for consistent midnight boundary
+        const TR_OFFSET = 3 * 60 * 60 * 1000;
+        const now = Date.now();
+        const todayTR = new Date(now + TR_OFFSET);
+        todayTR.setUTCHours(0, 0, 0, 0);
+        const todayUTC = new Date(todayTR.getTime() - TR_OFFSET);
         let canDraw = true;
         if (user.lastDailyTarot) {
-            const lastDraw = new Date(user.lastDailyTarot);
-            if (lastDraw >= today) {
+            const lastDraw = new Date(user.lastDailyTarot.getTime() + TR_OFFSET);
+            lastDraw.setUTCHours(0, 0, 0, 0);
+            if (lastDraw >= todayTR) {
                 canDraw = false;
             }
         }
@@ -32,20 +37,33 @@ const drawDailyTarot = async (req, res) => {
         const user = await index_1.prisma.user.findUnique({ where: { id: userId } });
         if (!user)
             return res.status(404).json({ error: 'User not found' });
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // VULN 65 FIX: Use TR UTC+3 offset for consistent midnight boundary
+        const TR_OFFSET = 3 * 60 * 60 * 1000;
+        const now = Date.now();
+        const todayTR = new Date(now + TR_OFFSET);
+        todayTR.setUTCHours(0, 0, 0, 0);
         if (user.lastDailyTarot) {
-            const lastDraw = new Date(user.lastDailyTarot);
-            if (lastDraw >= today) {
+            const lastDrawTR = new Date(user.lastDailyTarot.getTime() + TR_OFFSET);
+            lastDrawTR.setUTCHours(0, 0, 0, 0);
+            if (lastDrawTR >= todayTR) {
                 return res.status(400).json({ error: 'Already drawn today' });
             }
         }
         const randomIndex = Math.floor(Math.random() * tarot_1.majorArcana.length);
         const selectedCard = tarot_1.majorArcana[randomIndex];
-        await index_1.prisma.user.update({
-            where: { id: userId },
+        // Optimistic Locking: Eğer başka bir istek halihazırda 'lastDailyTarot' u güncellemişse bu işlem patlar ve 2. kart verilmez
+        const updatedCount = await index_1.prisma.user.updateMany({
+            where: {
+                id: userId,
+                // Null ise veya today'den önceyse izin ver: JS tarafında teyit ettik 
+                // ancak DB tarafında tam koruma için en azından aynı kullanıcının tek kaydı old. teyit edelim
+                lastDailyTarot: user.lastDailyTarot
+            },
             data: { lastDailyTarot: new Date() }
         });
+        if (updatedCount.count === 0) {
+            return res.status(403).json({ error: 'Yarış durumu engellendi (Birden fazla tarot çekilemez).' });
+        }
         res.json({ success: true, card: selectedCard });
     }
     catch (error) {

@@ -23,15 +23,19 @@ const group_routes_1 = __importDefault(require("./routes/group.routes"));
 const gift_routes_1 = __importDefault(require("./routes/gift.routes"));
 const tarot_routes_1 = __importDefault(require("./routes/tarot.routes"));
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
+const quest_routes_1 = __importDefault(require("./routes/quest.routes"));
 const socket_controller_1 = require("./controllers/socket.controller");
+const horoscope_cron_1 = require("./services/horoscope.cron");
 dotenv_1.default.config();
 const logger_1 = require("./utils/logger");
 // --- SAFETY NETS (Yakalanmayan Hatalar) ---
 process.on('uncaughtException', (err) => {
+    console.error(`[UNCAUGHT EXCEPTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, err.stack);
     logger_1.logger.error(`[UNCAUGHT EXCEPTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, { stack: err.stack });
     process.exit(1);
 });
 process.on('unhandledRejection', (err) => {
+    console.error(`[UNHANDLED REJECTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, err.stack);
     logger_1.logger.error(`[UNHANDLED REJECTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, { stack: err.stack });
     process.exit(1);
 });
@@ -41,12 +45,16 @@ exports.app = app;
 const httpServer = (0, http_1.createServer)(app);
 exports.httpServer = httpServer;
 // Restrict Socket.io CORS to same whitelist as Express
-const allowedOrigins = [
+const allowedOrigins = process.env.NODE_ENV === 'production' ? [
+    process.env.FRONTEND_URL, // In case a specific prod mobile proxy/frontend domain is used
+    'capacitor://localhost', // Capacitor iOS
+    'http://localhost', // Capacitor Android
+].filter(Boolean) : [
     process.env.FRONTEND_URL || 'http://localhost:5173',
     'http://localhost:8080',
     'http://localhost:8081',
-    'capacitor://localhost', // Capacitor Android/iOS
-    'http://localhost', // Capacitor WebView
+    'capacitor://localhost',
+    'http://localhost',
 ];
 const io = new socket_io_1.Server(httpServer, {
     cors: {
@@ -80,9 +88,12 @@ const limiter = (0, express_rate_limit_1.default)({
     message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
-app.use(express_1.default.json());
+// VULN 63 FIX: Removed duplicate express.json() call - already defined at line 81 with 10kb limit
 const path_1 = __importDefault(require("path"));
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
+const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
+const revenuecat_routes_1 = __importDefault(require("./routes/revenuecat.routes"));
+// ... Middleware imports remain correctly configured above
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/horoscope', horoscope_routes_1.default);
 app.use('/api/teller', teller_routes_1.default);
@@ -93,6 +104,9 @@ app.use('/api/group', group_routes_1.default);
 app.use('/api/gift', gift_routes_1.default);
 app.use('/api/tarot', tarot_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
+app.use('/api/notification', notification_routes_1.default);
+app.use('/api/quests', quest_routes_1.default);
+app.use('/api/revenuecat', revenuecat_routes_1.default);
 const errorHandler_1 = require("./middlewares/errorHandler");
 const errors_1 = require("./utils/errors");
 app.get('/health', (req, res) => {
@@ -109,6 +123,8 @@ app.use(errorHandler_1.globalErrorHandler);
 const PORT = process.env.PORT || 3000;
 async function bootstrap() {
     try {
+        await exports.prisma.user.updateMany({ data: { isOnline: false } });
+        logger_1.logger.info('Tüm hayalet online profiller çevrimdışına çekildi.');
         httpServer.listen(PORT, () => {
             logger_1.logger.info(`Server listening on port ${PORT}`);
         });
@@ -121,5 +137,6 @@ async function bootstrap() {
 // Only start the server if not in test mode
 if (process.env.NODE_ENV !== 'test') {
     bootstrap();
+    (0, horoscope_cron_1.startHoroscopeCron)();
 }
 //# sourceMappingURL=index.js.map

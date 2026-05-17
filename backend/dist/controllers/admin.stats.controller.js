@@ -8,9 +8,11 @@ const getDashboardStats = async (req, res) => {
         const premiumUsers = await index_1.prisma.user.count({ where: { isPremium: true } });
         const totalAppointments = await index_1.prisma.appointment.count();
         const pendingTellers = await index_1.prisma.tellerApplication.count({ where: { status: 'PENDING' } });
-        // Calculate total stardust in circulation
-        const users = await index_1.prisma.user.findMany({ select: { stardustBalance: true } });
-        const totalStardustCirculation = users.reduce((sum, user) => sum + user.stardustBalance, 0);
+        // VULN 61 FIX: Replace N+1 full-table scan with a single aggregate query
+        const stardustAgg = await index_1.prisma.user.aggregate({
+            _sum: { stardustBalance: true }
+        });
+        const totalStardustCirculation = stardustAgg._sum.stardustBalance ?? 0;
         // Get daily new users (last 7 days grouped)
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

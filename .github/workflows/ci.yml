@@ -9,6 +9,21 @@ on:
 jobs:
   backend-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: cosmic_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: ./backend
@@ -28,8 +43,15 @@ jobs:
     - name: Generate Prisma Client
       run: npx prisma generate
       
+    - name: Init DB Schema
+      run: npx prisma db push
+      env:
+        DATABASE_URL: "postgresql://postgres:testpassword@localhost:5432/cosmic_test"
+      
     - name: Run Backend Tests
       run: npm run test
+      env:
+        DATABASE_URL: "postgresql://postgres:testpassword@localhost:5432/cosmic_test"
 
   frontend-test:
     runs-on: ubuntu-latest

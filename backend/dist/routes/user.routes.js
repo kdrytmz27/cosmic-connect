@@ -26,9 +26,14 @@ router.get('/messages/:id', auth_middleware_1.authenticate, user_controller_1.ge
 router.post('/messages', auth_middleware_1.authenticate, user_controller_1.sendMessage);
 router.put('/profile', auth_middleware_1.authenticate, user_controller_1.updateProfile);
 router.put('/status', auth_middleware_1.authenticate, user_controller_1.updateCosmicStatus);
-router.post('/penalty', auth_middleware_1.authenticate, user_controller_1.applyPenalty);
 const admin_report_controller_1 = require("../controllers/admin.report.controller");
 router.post('/report', auth_middleware_1.authenticate, admin_report_controller_1.submitReport);
+// Block & Report System (FEAT-04)
+const block_controller_1 = require("../controllers/block.controller");
+router.post('/block/:targetId', auth_middleware_1.authenticate, block_controller_1.blockUser);
+router.delete('/block/:targetId', auth_middleware_1.authenticate, block_controller_1.unblockUser);
+router.get('/blocked', auth_middleware_1.authenticate, block_controller_1.getBlockedList);
+router.post('/report/:targetId', auth_middleware_1.authenticate, block_controller_1.reportUser);
 router.get('/daily-reward/status', auth_middleware_1.authenticate, user_controller_1.getDailyRewardStatus);
 router.post('/daily-reward/claim', auth_middleware_1.authenticate, user_controller_1.claimDailyReward);
 router.get('/leaderboard', auth_middleware_1.authenticate, user_controller_1.getLeaderboard);

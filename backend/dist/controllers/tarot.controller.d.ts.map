@@ -1,1 +1,1 @@
-{"version":3,"file":"tarot.controller.d.ts","sourceRoot":"","sources":["../../src/controllers/tarot.controller.ts"],"names":[],"mappings":"AAIA,eAAO,MAAM,mBAAmB,GAAU,KAAK,GAAG,EAAE,KAAK,GAAG,iBAwB3D,CAAC;AAEF,eAAO,MAAM,cAAc,GAAU,KAAK,GAAG,EAAE,KAAK,GAAG,iBA6BtD,CAAC"}
+{"version":3,"file":"tarot.controller.d.ts","sourceRoot":"","sources":["../../src/controllers/tarot.controller.ts"],"names":[],"mappings":"AAIA,eAAO,MAAM,mBAAmB,GAAU,KAAK,GAAG,EAAE,KAAK,GAAG,iBA6B3D,CAAC;AAEF,eAAO,MAAM,cAAc,GAAU,KAAK,GAAG,EAAE,KAAK,GAAG,iBA2CtD,CAAC"}

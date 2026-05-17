@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllAppointments = exports.approveRejectTeller = exports.getTellerApplications = exports.updateUser = exports.getAllUsers = void 0;
 const index_1 = require("../index");
+const UserRole_1 = require("../enums/UserRole");
 const getAllUsers = async (req, res) => {
     try {
         const { page = 1, limit = 20, search = '', role = '' } = req.query;
@@ -56,7 +57,7 @@ const updateUser = async (req, res) => {
         const dataToUpdate = {};
         // Validate role against whitelist to prevent arbitrary role injection
         if (role !== undefined) {
-            const validRoles = ['STANDARD', 'FORTUNE_TELLER', 'ADMIN'];
+            const validRoles = [UserRole_1.UserRole.STANDARD, UserRole_1.UserRole.FORTUNE_TELLER, UserRole_1.UserRole.ADMIN];
             if (!validRoles.includes(role)) {
                 return res.status(400).json({ error: 'Invalid role value' });
             }
@@ -109,6 +110,13 @@ const approveRejectTeller = async (req, res) => {
         if (!['APPROVED', 'REJECTED'].includes(status)) {
             return res.status(400).json({ error: 'Invalid status' });
         }
+        // VULN 48 FIX: Teller Application State 500 Crash (Admin Overwrite Error Prevented)
+        const applicationRecord = await index_1.prisma.tellerApplication.findUnique({ where: { id: id } });
+        if (!applicationRecord)
+            return res.status(404).json({ error: 'Application not found' });
+        if (applicationRecord.status !== 'PENDING') {
+            return res.status(400).json({ error: `State Error: This application is already ${applicationRecord.status}. Cannot re-approve.` });
+        }
         const application = await index_1.prisma.tellerApplication.update({
             where: { id: id },
             data: { status: status }
@@ -116,7 +124,7 @@ const approveRejectTeller = async (req, res) => {
         if (status === 'APPROVED') {
             await index_1.prisma.user.update({
                 where: { id: application.userId },
-                data: { role: 'FORTUNE_TELLER' }
+                data: { role: UserRole_1.UserRole.FORTUNE_TELLER }
             });
             // Create default fortune teller profile
             await index_1.prisma.fortuneTeller.create({
