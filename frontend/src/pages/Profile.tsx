@@ -284,8 +284,13 @@ const Profile = () => {
                                     </span>
                                 </div>
                                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                                    {profile.compatibility.message}
                                 </p>
+                                <button
+                                    onClick={() => navigate(`/synastry/${targetId}`)}
+                                    style={{ width: '100%', padding: '10px', marginTop: 12, borderRadius: 10, background: 'rgba(255,215,0,0.15)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', transition: 'all 0.2s' }}
+                                >
+                                    <Sparkles size={16} fill="var(--accent-gold)" /> Detaylı Astromatik Analizi Gör
+                                </button>
                             </div>
                         )}
 

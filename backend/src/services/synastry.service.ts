@@ -596,11 +596,15 @@ export function calculateSynastryReport(
 // ─── Quick Score (for lists / cards) ─────────
 
 export function calculateQuickSynastryScore(
-    user1: { birthDate: Date; birthTime: string; moonSign?: string; risingSign?: string },
-    user2: { birthDate: Date; birthTime: string; moonSign?: string; risingSign?: string }
+    user1: { birthDate?: Date | null; birthTime?: string | null; moonSign?: string | null; risingSign?: string | null },
+    user2: { birthDate?: Date | null; birthTime?: string | null; moonSign?: string | null; risingSign?: string | null }
 ): { score: number; message: string } {
-    const u1Planets = calculatePlanetaryPositions(user1.birthDate, user1.birthTime);
-    const u2Planets = calculatePlanetaryPositions(user2.birthDate, user2.birthTime);
+    if (!user1.birthDate || !user2.birthDate) {
+        return { score: 50, message: 'Astromatik analiz için doğum tarihi bilgileri eksik.' };
+    }
+
+    const u1Planets = calculatePlanetaryPositions(user1.birthDate, user1.birthTime || '12:00');
+    const u2Planets = calculatePlanetaryPositions(user2.birthDate, user2.birthTime || '12:00');
 
     const aspects = calculateAspects(u1Planets, u2Planets);
     const categories = calculateCategoryScores(aspects);
