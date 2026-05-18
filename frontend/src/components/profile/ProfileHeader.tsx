@@ -111,7 +111,7 @@ export const ProfileHeader = ({
             ) : (
                 <>
                     <h2 style={{ marginBottom: 4, fontSize: 24, textTransform: 'capitalize', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        {profile.profile.name || profile.profile.email.split('@')[0]}
+                        {profile.profile.name || profile.profile.email?.split('@')[0] || 'Kozmik Yolcu'}
                         {profile.profile.isPremium && <Crown size={20} color="var(--accent-gold)" />}
                     </h2>
                     {profile.profile.bio && (

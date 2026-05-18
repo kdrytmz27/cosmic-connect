@@ -55,7 +55,7 @@ const Profile = () => {
         if (targetId) {
             api.get(`/user/profile/${targetId}`).then(res => {
                 setProfile(res.data);
-                setName(res.data.profile.name || res.data.profile.email.split('@')[0]);
+                setName(res.data.profile.name || res.data.profile.email?.split('@')[0] || 'Kozmik Yolcu');
                 setBio(res.data.profile.bio || '');
                 setHobby(res.data.profile.hobby || '');
                 setMusic(res.data.profile.music || '');

@@ -1,7 +1,7 @@
 .app-layout {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100dvh;
     width: 100%;
     overflow: hidden;
 }
@@ -9,13 +9,13 @@
 .main-content {
     flex: 1;
     overflow-y: auto;
-    padding-bottom: 80px;
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 16px));
 }
 
 /* ── Bottom Nav Shell ── */
 .bottom-nav {
     position: fixed;
-    bottom: max(8px, env(safe-area-inset-bottom, 8px));
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
     left: 50%;
     transform: translateX(-50%) translateZ(0);
     width: calc(100% - 16px);
