@@ -29,11 +29,14 @@ const Match = () => {
         });
 
         socket.on('matchFound', async (data) => {
-            setPendingMatchData(data);
+            // Extract the other user's ID first, before any async work
+            const otherId = data.users?.find((id: string) => String(id) !== String(userId));
+            // Store otherId inside pendingMatchData so countdown can fallback to it
+            const enrichedData = { ...data, otherId };
+            setPendingMatchData(enrichedData);
             setMatchState('pending');
-            setMatchCountdown(5);
+            setMatchCountdown(15); // Increased from 5 to 15s to give profile API time to respond
 
-            const otherId = data.users.find((id: string) => String(id) !== String(userId));
             if (otherId) {
                 try {
                     const res = await api.get(`/user/profile/${otherId}`);
@@ -45,7 +48,7 @@ const Match = () => {
                     setMatchedUser({ id: otherId, name: 'Gizemli Yabancı' });
                 }
             } else {
-                setMatchedUser({ name: 'Gizemli Yabancı' });
+                setMatchedUser({ id: null, name: 'Gizemli Yabancı' });
             }
         });
 
@@ -67,15 +70,17 @@ const Match = () => {
         };
     }, [socket, userId]);
 
-    // Countdown effect for the 5-second modal
+    // Countdown effect for the match acceptance modal
     useEffect(() => {
         let timer: any;
         if (matchCountdown !== null && matchCountdown > 0) {
             timer = setTimeout(() => {
                 setMatchCountdown(matchCountdown - 1);
             }, 1000);
-        } else if (matchCountdown === 0 && pendingMatchData && matchedUser) {
-            handleAcceptMatch();
+        } else if (matchCountdown === 0 && pendingMatchData) {
+            // Fallback: use otherId from enrichedData if matchedUser.id not yet set
+            const targetId = matchedUser?.id || pendingMatchData?.otherId;
+            handleAcceptMatch(targetId);
         }
         return () => clearTimeout(timer);
     }, [matchCountdown, pendingMatchData, matchedUser]);
@@ -93,19 +98,25 @@ const Match = () => {
         setMatchCountdown(null);
     };
 
-    const handleAcceptMatch = async () => {
-        if (!pendingMatchData || !matchedUser?.id) return;
+    const handleAcceptMatch = async (targetId?: string) => {
+        const id = targetId || matchedUser?.id;
+        if (!pendingMatchData || !id) {
+            showToast('Eşleşme verisi eksik, tekrar deneyin.', 'error');
+            resetMatch();
+            return;
+        }
         try {
             // Create friendship with 160s expiration via backend
-            await api.post(`/user/friend/${matchedUser.id}/accept-match`);
+            await api.post(`/user/friend/${id}/accept-match`);
             // Don't emit leaveRoom - it would trigger partnerLeftRoom on the other user
             // Just leave the matchmaking queue
             socket?.emit('leaveMatchmaking');
             resetMatch();
             // Navigate to Messages with this chat open
-            navigate('/messages', { state: { openChatId: matchedUser.id } });
-        } catch (e) {
-            showToast('Eşleşme kabul edilemedi', 'error');
+            navigate('/messages', { state: { openChatId: id } });
+        } catch (e: any) {
+            const msg = e?.response?.data?.message || e?.message || 'Eşleşme kabul edilemedi';
+            showToast(msg, 'error');
             resetMatch();
         }
     };
