@@ -10,6 +10,13 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'http',
     cleartext: true,
+  },
+  plugins: {
+    CapacitorUpdater: {
+      autoUpdate: true,          // Uygulama açılışında otomatik güncelleme kontrol et
+      statsUrl: '',              // İstatistik gönderme (boş = devre dışı)
+      privateKey: undefined,     // Bundle imzalama için (isteğe bağlı)
+    }
   }
 };
 

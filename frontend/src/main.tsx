@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { Purchases } from '@revenuecat/purchases-capacitor';
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
+
+// Capgo OTA: Uygulamanın başarıyla yüklendiğini Capgo sunucusuna bildir
+// Bu çağrı OLMADAN Capgo güncellemeyi başarısız sayar ve eski versiyona döner
+CapacitorUpdater.notifyAppReady();
 
 // RevenueCat Yapılandırması (Configure)
 const configureRevenueCat = async () => {

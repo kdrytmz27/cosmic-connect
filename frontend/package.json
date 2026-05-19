@@ -16,6 +16,7 @@
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/ios": "^8.2.0",
+    "@capgo/capacitor-updater": "^8.46.1",
     "@revenuecat/purchases-capacitor": "^13.1.0",
     "axios": "^1.13.6",
     "framer-motion": "^12.34.3",
