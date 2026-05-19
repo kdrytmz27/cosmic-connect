@@ -205,26 +205,38 @@ export const friendshipService = {
             }
         });
 
-        // If already a valid active MATCH, return success immediately (idempotent)
-        if (existingRelation?.status === 'MATCH' && existingRelation?.expiresAt && new Date() < existingRelation.expiresAt) {
-            return { success: true, expiresAt: existingRelation.expiresAt.toISOString(), serverTime: Date.now() };
-        }
-
         // Security: must have a prior relation (SWIPE_MATCH from socket matchmaking OR existing friendship)
         if (!existingRelation) {
             throw new Error('Geçersiz İşlem: Eşleşme olmadan zorla kabul sağlanamaz (Force Match Kalkanı).');
         }
 
-        // Delete old records, create fresh bidirectional MATCH
-        await prisma.friendship.deleteMany({
+        // If already a valid active MATCH, return success immediately (idempotent)
+        if (existingRelation.status === 'MATCH' && existingRelation.expiresAt && new Date() < existingRelation.expiresAt) {
+            return { success: true, expiresAt: existingRelation.expiresAt.toISOString(), serverTime: Date.now() };
+        }
+
+        const expiresAt = new Date(Date.now() + CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
+
+        // Update any existing records to MATCH (No deleteMany to prevent race condition gaps)
+        await prisma.friendship.updateMany({
+            where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] },
+            data: { status: 'MATCH', expiresAt }
+        });
+
+        // Ensure bidirectional relationship exists for getFriends
+        const rels = await prisma.friendship.findMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
 
-        const expiresAt = new Date(Date.now() + CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
-        await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' as any } });
-        await prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' as any } });
+        if (!rels.some(r => r.user1Id === userId && r.user2Id === targetId)) {
+            await prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' as any } });
+        }
+        if (!rels.some(r => r.user1Id === targetId && r.user2Id === userId)) {
+            await prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' as any } });
+        }
 
         // FEAT-08: Increment daily quest matches & FEAT-10: Karma reward
+        // Prevent double rewarding in race conditions by checking idempotency above
         await prisma.user.updateMany({
             where: { id: userId },
             data: { dailyQuestMatches: { increment: 1 }, karma: { increment: 5 } }

@@ -23,10 +23,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
   color: var(--text-primary);
-  min-height: 100vh;
   display: flex;
   justify-content: center;
   overflow-x: hidden;
@@ -36,7 +40,7 @@ body {
 #root {
   width: 100%;
   max-width: 480px;
-  min-height: 100vh;
+  height: 100%;
   position: relative;
   background-color: transparent;
   display: flex;
