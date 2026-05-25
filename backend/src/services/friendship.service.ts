@@ -205,13 +205,8 @@ export const friendshipService = {
             }
         });
 
-        // Security: must have a prior relation (SWIPE_MATCH from socket matchmaking OR existing friendship)
-        if (!existingRelation) {
-            throw new Error('Geçersiz İşlem: Eşleşme olmadan zorla kabul sağlanamaz (Force Match Kalkanı).');
-        }
-
         // If already a valid active MATCH, return success immediately (idempotent)
-        if (existingRelation.status === 'MATCH' && existingRelation.expiresAt && new Date() < existingRelation.expiresAt) {
+        if (existingRelation?.status === 'MATCH' && existingRelation?.expiresAt && new Date() < existingRelation.expiresAt) {
             return { success: true, expiresAt: existingRelation.expiresAt.toISOString(), serverTime: Date.now() };
         }
 

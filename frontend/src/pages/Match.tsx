@@ -35,7 +35,7 @@ const Match = () => {
             const enrichedData = { ...data, otherId };
             setPendingMatchData(enrichedData);
             setMatchState('pending');
-            setMatchCountdown(15); // Increased from 5 to 15s to give profile API time to respond
+            setMatchCountdown(5); // Increased from 5 to 15s to give profile API time to respond
 
             if (otherId) {
                 try {
