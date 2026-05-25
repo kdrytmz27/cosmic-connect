@@ -66,6 +66,28 @@ export const friendshipService = {
         const existingIn = await prisma.friendship.findFirst({ where: { user1Id: receiverId, user2Id: senderId } });
         const existingOut = await prisma.friendship.findFirst({ where: { user1Id: senderId, user2Id: receiverId } });
 
+        // If BOTH sides have a MATCH record, upgrade to permanent FRIEND
+        if (existingIn && existingOut) {
+            const bothMatch = (existingIn.status === 'MATCH' || existingIn.status === 'SWIPE_MATCH') &&
+                (existingOut.status === 'MATCH' || existingOut.status === 'SWIPE_MATCH');
+            if (bothMatch) {
+                await prisma.friendship.updateMany({
+                    where: { OR: [{ user1Id: senderId, user2Id: receiverId }, { user1Id: receiverId, user2Id: senderId }] },
+                    data: { status: 'FRIEND' as any, expiresAt: null }
+                });
+                await notificationService.createNotification({
+                    userId: receiverId,
+                    type: 'MATCH',
+                    title: 'Kalıcı Arkadaş!',
+                    content: 'Artık kalıcı arkadaşsınız, mesajlaşmaya devam edebilirsiniz!',
+                    actionUrl: '/messages'
+                });
+                return { message: 'Kalıcı arkadaş oldunuz!', matched: true, permanent: true };
+            }
+            // Already permanent friends
+            return { message: 'Zaten arkadaşsınız', matched: true };
+        }
+
         if (existingIn) {
             if (!existingOut) {
                 await prisma.friendship.create({ data: { user1Id: senderId, user2Id: receiverId, status: 'SWIPE_MATCH' as any } });
@@ -95,11 +117,11 @@ export const friendshipService = {
         }
 
         if (existingOut) {
-            return { message: 'Request already sent', matched: false };
+            return { message: 'İstek zaten gönderildi', matched: false };
         }
 
         await prisma.friendship.create({ data: { user1Id: senderId, user2Id: receiverId, status: 'SWIPE_MATCH' as any } });
-        return { message: 'Friend request sent', matched: false };
+        return { message: 'Arkadaşlık isteği gönderildi', matched: false };
     },
 
     getFriends: async (userId: string) => {
