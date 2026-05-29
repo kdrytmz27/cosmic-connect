@@ -88,6 +88,12 @@ const ChatView: React.FC<ChatViewProps> = ({
         return () => { socket.off('giftSentSuccess', handleGiftSuccess); };
     }, [socket, updateEconomy, showToast]);
 
+    // Hide bottom nav while chatting
+    React.useEffect(() => {
+        document.body.classList.add('hide-nav');
+        return () => document.body.classList.remove('hide-nav');
+    }, []);
+
     // FEAT-11 Icebreaker Logic
     const getIcebreaker = (mySign: string, theirSign: string) => {
         const fire = ['Aries', 'Leo', 'Sagittarius', 'Koç', 'Aslan', 'Yay'];

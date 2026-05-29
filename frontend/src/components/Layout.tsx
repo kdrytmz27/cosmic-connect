@@ -57,8 +57,8 @@ const Layout = () => {
         <div className="app-layout">
             <header className="app-header" style={{
                 display: 'flex',
-                justifyContent: 'space-between',
-                padding: '12px 20px',
+                justifyContent: 'flex-end',
+                padding: 'calc(12px + env(safe-area-inset-top, 0px)) 20px 12px 20px',
                 position: 'fixed',
                 top: 0,
                 width: '100%',
@@ -66,26 +66,7 @@ const Layout = () => {
                 background: 'linear-gradient(to bottom, rgba(15,15,30,0.95), rgba(15,15,30,0))',
                 pointerEvents: 'none'
             }}>
-                <div style={{ pointerEvents: 'auto' }}>
-                    {/* Logo Area */}
-                    <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="logo-icon" style={{
-                            width: '28px',
-                            height: '28px',
-                            background: 'linear-gradient(135deg, #4facfe, #00f2fe)',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 0 10px rgba(79, 172, 254, 0.5)'
-                        }}>
-                            <Star size={16} color="white" />
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>
-                            Cosmic
-                        </h1>
-                    </div>
-                </div>
+                {/* Sol tarafta Logo artık kullanılmıyor, direkt NotificationBell sağ tarafa kilitli */}
                 <div style={{ pointerEvents: 'auto' }}>
                     {/* Right Action Icons (Notifications) */}
                     <NotificationBell />

@@ -228,7 +228,6 @@ const Profile = () => {
                                 <ArrowLeft size={20} />
                             </button>
                         )}
-                        <h1 className="glow-text" style={{ fontSize: 32 }}>Profil</h1>
                     </div>
                     {isOwner && (
                         <div>

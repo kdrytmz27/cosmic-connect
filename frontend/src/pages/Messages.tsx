@@ -425,7 +425,6 @@ const Messages = () => {
     // ==================== Main Tab View ====================
     return (
         <div className="messages-container">
-            <h1 className="glow-text text-[28px] mb-5">Mesajlar & Eşleşmeler</h1>
 
             <div className="tabs-nav">
                 <button

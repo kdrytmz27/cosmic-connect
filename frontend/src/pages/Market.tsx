@@ -82,8 +82,7 @@ const Market = () => {
 
     return (
         <div style={{ padding: 16, paddingBottom: 100, minHeight: '100vh' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <h1 className="glow-text" style={{ fontSize: 28, margin: 0 }}>Market & Premium</h1>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: 20 }}>
                     <Sparkles size={16} color="var(--accent-gold)" />
                     <span style={{ fontWeight: 'bold' }}>{stardustBalance}</span>

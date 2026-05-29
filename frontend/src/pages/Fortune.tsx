@@ -155,7 +155,6 @@ const Fortune = () => {
 
     return (
         <div style={{ padding: 24, paddingBottom: 100 }}>
-            <h1 className="glow-text" style={{ fontSize: 32, marginBottom: 24 }}>Falcı & Oyunlar</h1>
 
             <UniversalSlotMachine
                 gameState={gameState}

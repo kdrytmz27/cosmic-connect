@@ -152,9 +152,8 @@ const Home = () => {
 
     return (
         <div style={{ padding: 16, paddingBottom: 100, minHeight: '100vh', overflowX: 'hidden' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <h1 className="glow-text" style={{ fontSize: 28 }}>Keşfet</h1>
+            {/* Sadece filtre butonu (başlık kaldırıldı) */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                 <button
                     onClick={() => setShowFilters(!showFilters)}
                     style={{ background: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: '50%', border: 'none', color: 'white' }}

@@ -124,7 +124,7 @@
     transform: translateY(0);
 }
 
-/* ── Unread badge ── */
+/* ── Nav badge ── */
 .nav-badge {
     position: absolute;
     top: -6px;
@@ -137,4 +137,13 @@
     padding: 1px 5px;
     line-height: 1.4;
     border: 2px solid rgba(15, 10, 30, 1);
+}
+
+/* ── Hide Nav Utility for Chat View ── */
+body.hide-nav .bottom-nav {
+    display: none !important;
+}
+
+body.hide-nav .main-content {
+    padding-bottom: 0 !important;
 }

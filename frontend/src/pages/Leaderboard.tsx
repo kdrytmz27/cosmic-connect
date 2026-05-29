@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, RefreshCw, Loader, Crown } from 'lucide-react';
+import { RefreshCw, Loader, Crown } from 'lucide-react';
 import api, { BACKEND_URL } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,11 +44,8 @@ const Leaderboard = () => {
 
     return (
         <div style={{ padding: '24px 16px', maxWidth: 600, margin: '0 auto', paddingBottom: 100 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <h1 className="glow-text" style={{ fontSize: 28, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Trophy color="var(--accent-gold)" /> Liderlik Tablosu
-                </h1>
-                <button onClick={fetchLeaderboard} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                <button onClick={fetchLeaderboard} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: 'none', color: 'white', cursor: 'pointer', padding: 8 }}>
                     <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
                 </button>
             </div>
