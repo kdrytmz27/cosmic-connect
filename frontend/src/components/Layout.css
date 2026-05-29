@@ -1,39 +1,46 @@
+/* ── Root layout container ── */
 .app-layout {
     display: flex;
     flex-direction: column;
+    /* Fill parent (#root which is 100dvh) */
     height: 100%;
     width: 100%;
-    overflow: hidden;
+    position: relative;
 }
 
+/* ── Scrollable content area ── */
 .main-content {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    /* Leave room for bottom nav */
-    padding-bottom: 0;
+    /* Prevent content from hiding beneath the fixed bottom nav (70px nav + 10px buffer) */
+    padding-bottom: 80px;
     -webkit-overflow-scrolling: touch;
 }
 
-/* ── Bottom Nav Shell ── */
+/* ── Bottom Navigation Bar ── */
+/* position:fixed with bottom:0 is the most reliable approach for ALL Android WebViews */
 .bottom-nav {
-    /* Stick to bottom via flex – works on all WebViews including Android emulator */
-    flex-shrink: 0;
-    position: relative;
-    bottom: auto;
-    left: auto;
-    transform: none;
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
     width: 100%;
+    max-width: 480px;
     height: 70px;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 0 12px;
+    padding: 0 8px;
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: 50;
-    background: rgba(12, 8, 24, 0.97);
-    border-top: 1px solid rgba(139, 92, 246, 0.18);
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+    z-index: 9999;
+    background: rgba(10, 6, 22, 0.97);
+    border-top: 1px solid rgba(139, 92, 246, 0.2);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    /* GPU acceleration */
+    -webkit-transform: translateX(-50%) translateZ(0);
+    transform: translateX(-50%) translateZ(0);
+    will-change: transform;
 }
 
 /* ── Nav track – controls how many items spread ── */
@@ -43,42 +50,38 @@
     width: 100%;
 }
 
-/* 5 items → even spread */
+/* 7 items → even spread */
 .nav-track--user {
     justify-content: space-around;
     max-width: 480px;
-    margin: 0 auto;
 }
 
-/* 3 items → centered with generous spacing */
+/* 3 items → even spread */
 .nav-track--teller {
-    justify-content: center;
-    gap: 48px;
-    max-width: 360px;
+    justify-content: space-around;
+    max-width: 300px;
     margin: 0 auto;
 }
 
-/* ── Individual Nav Item ── */
+/* ── Nav item ── */
 .nav-item {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.4);
     text-decoration: none;
-    color: rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    position: relative;
     transition: color 0.25s ease;
-    padding: 6px 10px;
-    border-radius: 16px;
-    gap: 3px;
-    min-width: 52px;
-}
-
-.nav-item:hover {
-    color: rgba(255, 255, 255, 0.75);
+    min-width: 40px;
 }
 
 .nav-item.active {
-    color: var(--accent-purple, #a855f7);
+    color: #a855f7;
 }
 
 /* ── Icon wrapper with float animation ── */
