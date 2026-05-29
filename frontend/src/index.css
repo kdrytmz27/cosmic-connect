@@ -23,12 +23,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html,
-body {
+html {
   height: 100%;
 }
 
 body {
+  /* Use min-height so content can grow, but body always fills screen */
+  height: 100%;
+  min-height: 100dvh;
   background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
   color: var(--text-primary);
   display: flex;
@@ -40,11 +42,14 @@ body {
 #root {
   width: 100%;
   max-width: 480px;
-  height: 100%;
+  /* Must fill the full viewport height so flex children (bottom-nav) stay visible */
+  height: 100dvh;
+  min-height: 100dvh;
   position: relative;
   background-color: transparent;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .glass-panel {
