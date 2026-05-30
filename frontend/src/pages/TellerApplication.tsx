@@ -33,8 +33,8 @@ const TellerApplication = () => {
     const [experience, setExperience] = useState('');
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
-    // Test mode
-    const [isTestAdmin] = useState(true);
+    // Test mode - DISABLED for production. Only admins can approve via Admin Dashboard.
+    const [isTestAdmin] = useState(false);
 
     useEffect(() => {
         const fetchStatus = async () => {

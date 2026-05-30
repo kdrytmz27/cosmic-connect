@@ -5,7 +5,7 @@ if (!secret) {
     throw new Error('FATAL ERROR: JWT_SECRET environment variable is missing.');
 }
 const JWT_SECRET: string = secret;
-const JWT_EXPIRES_IN = '7d';
+const JWT_EXPIRES_IN = '30d';
 
 export interface TokenPayload {
     userId: string;

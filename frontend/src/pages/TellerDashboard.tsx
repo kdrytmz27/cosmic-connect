@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, MessageCircle, Sparkles, Clock, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import VoiceRecorder from '../components/common/VoiceRecorder';
 
 interface FortuneRequest {
     id: string;
@@ -38,7 +39,9 @@ const TellerDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [selectedFortune, setSelectedFortune] = useState<FortuneRequest | null>(null);
     const [interpretation, setInterpretation] = useState('');
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [uploadingAudio, setUploadingAudio] = useState(false);
 
     useEffect(() => {
         fetchDashboardData();
@@ -71,22 +74,45 @@ const TellerDashboard = () => {
     };
 
     const handleSubmitInterpretation = async () => {
-        if (!selectedFortune || !interpretation.trim()) return;
+        if (!selectedFortune) return;
+        if (!interpretation.trim() && !audioUrl) return;
+
         setSubmitting(true);
         try {
             await api.post('/teller/fortunes/interpret', {
                 appointmentId: selectedFortune.id,
-                interpretation
+                interpretation,
+                audioUrl
             });
             setInterpretation('');
+            setAudioUrl(null);
             setSelectedFortune(null);
             showToast('Fal başarıyla yorumlandı! 🌟', 'success');
             fetchDashboardData();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error submitting interpretation:', err);
-            showToast('Fal gönderilirken bir hata oluştu.', 'error');
+            showToast(err.response?.data?.error || 'Fal gönderilirken bir hata oluştu.', 'error');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleAudioUpload = async (blob: Blob) => {
+        setUploadingAudio(true);
+        const formData = new FormData();
+        formData.append('audio', blob, 'fortune_interpretation.webm');
+
+        try {
+            const uploadRes = await api.post('/audio/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setAudioUrl(uploadRes.data.audioUrl);
+            showToast('Ses kaydı yüklendi!', 'success');
+        } catch (err) {
+            console.error('Audio upload error:', err);
+            showToast('Ses kaydı yüklenemedi', 'error');
+        } finally {
+            setUploadingAudio(false);
         }
     };
 
@@ -265,13 +291,28 @@ const TellerDashboard = () => {
                                 </div>
                             </div>
 
+                            <div style={{ marginBottom: 20 }}>
+                                {audioUrl ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(167, 139, 250, 0.1)', padding: 12, borderRadius: 12, border: '1px solid rgba(167,139,246,0.3)' }}>
+                                        <audio controls src={`${BACKEND_URL}${audioUrl}`} style={{ height: 36, flex: 1 }} />
+                                        <button onClick={() => setAudioUrl(null)} style={{ color: 'var(--accent-pink)', fontSize: 14 }}>Sil</button>
+                                    </div>
+                                ) : (
+                                    <VoiceRecorder 
+                                        onRecordingComplete={handleAudioUpload} 
+                                        isUploading={uploadingAudio} 
+                                        maxDurationMs={180000} 
+                                    />
+                                )}
+                            </div>
+
                             <div style={{ display: 'flex', gap: 12, marginTop: 'auto' }}>
-                                <button className="secondary-btn" style={{ flex: 1, padding: '12px 0' }} onClick={() => setSelectedFortune(null)}>İptal</button>
+                                <button className="secondary-btn" style={{ flex: 1, padding: '12px 0' }} onClick={() => { setSelectedFortune(null); setAudioUrl(null); setInterpretation(''); }}>İptal</button>
                                 <button
                                     className="primary-btn"
                                     style={{ flex: 1, padding: '12px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                                     onClick={handleSubmitInterpretation}
-                                    disabled={submitting || interpretation.trim().length < 20}
+                                    disabled={submitting || (interpretation.trim().length < 20 && !audioUrl)}
                                 >
                                     {submitting ? (
                                         <div className="animate-spin" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'white', borderRadius: '50%' }} />
@@ -280,7 +321,7 @@ const TellerDashboard = () => {
                                     )}
                                 </button>
                             </div>
-                            {interpretation.trim().length > 0 && interpretation.trim().length < 20 && (
+                            {(!audioUrl && interpretation.trim().length > 0 && interpretation.trim().length < 20) && (
                                 <p style={{ textAlign: 'center', color: 'var(--accent-pink)', fontSize: 12, marginTop: 12 }}>Yorumunuz en az 20 karakter olmalıdır.</p>
                             )}
                         </motion.div>

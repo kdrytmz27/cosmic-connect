@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { slotManager } from '../services/slot.service';
 import { logger } from '../utils/logger';
 import { UserRole } from '../enums/UserRole';
+import { CONSTANTS } from '../config/constants';
 
 export const listTellers = async (req: Request, res: Response) => {
     try {
@@ -37,10 +38,10 @@ export const bookAppointment = async (req: Request, res: Response) => {
             return;
         }
 
-        const APPOINTMENT_COST = 100;
+        const APPOINTMENT_COST = CONSTANTS.COSTS.FORTUNE_TELLING_BASE || 300;
         if (user.stardustBalance < APPOINTMENT_COST) {
             logger.error('[bookAppointment] Not enough stardust for user', { balance: user.stardustBalance });
-            res.status(400).json({ error: 'Not enough stardust' });
+            res.status(400).json({ error: `Not enough stardust. Gerekli miktar: ${APPOINTMENT_COST}` });
             return;
         }
 
@@ -203,7 +204,7 @@ export const getPendingFortunes = async (req: Request, res: Response) => {
 export const interpretFortune = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
-        const { appointmentId, interpretation } = req.body;
+        const { appointmentId, interpretation, audioUrl } = req.body;
         if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
         const teller = await prisma.fortuneTeller.findUnique({ where: { userId } });
@@ -214,16 +215,16 @@ export const interpretFortune = async (req: Request, res: Response) => {
             res.status(404).json({ error: 'Fortune not found or not yours' }); return;
         }
 
-        // VULN 53 FIX: Minimum interpretation limit to block fraud (empty/single word interpretations)
-        if (!interpretation || interpretation.trim().length < 50) {
-            res.status(400).json({ error: 'Yorumunuz çok kısa. Lütfen detaylı bir fal yorumu yazınız. (Min. 50 harf)' });
+        // VULN 53 FIX: Minimum interpretation limit to block fraud, bypassed if they sent a voice message (audioUrl)
+        if (!audioUrl && (!interpretation || interpretation.trim().length < 50)) {
+            res.status(400).json({ error: 'Yorumunuz çok kısa. Lütfen detaylı bir fal yorumu yazınız. (Min. 50 harf) veya ses kaydı gönderin.' });
             return;
         }
 
         // Ensure atomic update, only update if PENDING to prevent infinite money glitch
         const updatedCount = await prisma.appointment.updateMany({
             where: { id: appointmentId, status: 'PENDING' },
-            data: { status: 'COMPLETED', interpretation }
+            data: { status: 'COMPLETED', interpretation, audioUrl }
         });
 
         if (updatedCount.count === 0) {

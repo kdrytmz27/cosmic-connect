@@ -9,7 +9,7 @@ if (!import.meta.env.VITE_API_URL) {
     console.error('[API] VITE_API_URL tanımlı değil! Capacitor native build\'de backend\'e bağlanılamaz.');
 }
 
-export const BACKEND_URL: string = import.meta.env.VITE_API_URL || 'https://api.cosmicconnect.com';
+export const BACKEND_URL: string = 'http://83.229.85.159:3000';
 
 const api = axios.create({
     baseURL: `${BACKEND_URL}/api`,

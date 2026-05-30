@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { xpService } from '../services/xp.service';
 
 const DAILY_QUEST_MATCH_REQ = 1;
 const DAILY_QUEST_MESSAGE_REQ = 5;
@@ -88,6 +89,9 @@ export const claimQuests = async (req: Request, res: Response) => {
         }
 
         const updated = await prisma.user.findUnique({ where: { id: userId } });
+
+        // Görev tamamlanınca ek XP veriyoruz
+        await xpService.addXp(userId, 50);
 
         res.json({ message: 'Ödüller alındı!', remainingStardust: updated?.stardustBalance });
     } catch (e) {

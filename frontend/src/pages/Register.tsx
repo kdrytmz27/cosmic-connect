@@ -7,16 +7,50 @@ import './Auth.css';
 
 const Register = () => {
     const [formData, setFormData] = useState({ email: '', password: '', name: '', birthDate: '', birthTime: '', birthCity: '' });
+    const [loading, setLoading] = useState(false);
     const { login } = useAuth();
-    // Removed unused useToast
+
+    const geocodeCity = async (city: string): Promise<{ lat: number; lon: number } | null> => {
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setLoading(true);
         try {
-            const res = await api.post('/auth/register', formData);
+            // Şehir ismini enlem/boylam koordinatına çevir
+            const coords = await geocodeCity(formData.birthCity);
+            if (!coords) {
+                alert('Doğum yeri bulunamadı. Lütfen geçerli bir şehir adı girin (Örn: Istanbul).');
+                setLoading(false);
+                return;
+            }
+
+            const payload = {
+                email: formData.email,
+                password: formData.password,
+                name: formData.name,
+                birthDate: formData.birthDate,
+                birthTime: formData.birthTime,
+                latitude: coords.lat,
+                longitude: coords.lon,
+            };
+
+            const res = await api.post('/auth/register', payload);
             login(res.data.token, res.data.user, '/onboarding');
         } catch (err: any) {
-            // Error managed by global interceptor, but we can trigger toast if needed
+            // Error managed by global interceptor
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -33,11 +67,13 @@ const Register = () => {
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <input type="text" id="name" name="name" placeholder="Ad Soyad" onChange={e => setFormData({ ...formData, name: e.target.value })} className="input-field" required />
                     <input type="email" id="email" name="email" placeholder="E-posta" onChange={e => setFormData({ ...formData, email: e.target.value })} className="input-field" required />
-                    <input type="password" id="password" name="password" placeholder="Şifre" onChange={e => setFormData({ ...formData, password: e.target.value })} className="input-field" required />
+                    <input type="password" id="password" name="password" placeholder="Şifre (En az 8 karakter, 1 büyük harf, 1 rakam)" onChange={e => setFormData({ ...formData, password: e.target.value })} className="input-field" required />
                     <input type="date" id="birthDate" name="birthDate" onChange={e => setFormData({ ...formData, birthDate: e.target.value })} className="input-field" required />
                     <input type="time" id="birthTime" name="birthTime" onChange={e => setFormData({ ...formData, birthTime: e.target.value })} className="input-field" required />
                     <input type="text" id="birthCity" name="birthCity" placeholder="Doğum Yeri (Örn: Istanbul)" onChange={e => setFormData({ ...formData, birthCity: e.target.value })} className="input-field" required />
-                    <button type="submit" className="primary-btn mt-4">Evrene Katıl</button>
+                    <button type="submit" className="primary-btn mt-4" disabled={loading}>
+                        {loading ? 'Yıldızlar hesaplanıyor...' : 'Evrene Katıl'}
+                    </button>
                 </form>
                 <p className="text-center mt-4 text-sm text-secondary">
                     Zaten yolcu musun? <Link to="/login" className="text-accent underline">Giriş Yap</Link>

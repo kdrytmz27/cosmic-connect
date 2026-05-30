@@ -50,7 +50,10 @@ const Login = () => {
                     />
                     <button type="submit" className="primary-btn mt-2">Giriş Yap</button>
                 </form>
-                <p className="text-center mt-4 text-sm text-secondary">
+                <p className="text-center mt-3 text-sm">
+                    <Link to="/forgot-password" className="text-accent underline">Şifremi Unuttum</Link>
+                </p>
+                <p className="text-center mt-2 text-sm text-secondary">
                     Kozmik yolculuğuna başlamadın mı? <Link to="/register" className="text-accent underline">Kayıt Ol</Link>
                 </p>
             </motion.div>

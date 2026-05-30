@@ -46,7 +46,7 @@ export class BadgeService {
 
             if (!user) return [];
 
-            const existingBadges: string[] = JSON.parse(user.badges || '[]');
+            const existingBadges: string[] = Array.isArray(user.badges) ? user.badges as string[] : [];
             const newBadges: string[] = [...existingBadges];
             const awardedNow: string[] = [];
 
@@ -77,8 +77,8 @@ export class BadgeService {
 
             if (awardedNow.length > 0) {
                 const updatedCount = await prisma.user.updateMany({
-                    where: { id: userId, badges: user.badges },
-                    data: { badges: JSON.stringify(newBadges) }
+                    where: { id: userId },
+                    data: { badges: newBadges }
                 });
 
                 // Başarılı ise çık ve rozetleri dön

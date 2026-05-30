@@ -58,7 +58,7 @@ export const sendGift = async (req: Request, res: Response) => {
 
             await tx.user.update({
                 where: { id: receiverId },
-                data: { stardustBalance: { increment: Math.floor(giftDef.cost / 2) } }
+                data: { stardustBalance: { increment: Math.floor(giftDef.cost * 0.6) } } // %40 Kesinti (Receiver %60'ını alır)
             });
 
             const gift = await tx.gift.create({

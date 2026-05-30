@@ -26,6 +26,8 @@ const TellerProfile = lazy(() => import('./pages/TellerProfile'));
 const TellerApplication = lazy(() => import('./pages/TellerApplication'));
 const SynastryAnalysis = lazy(() => import('./pages/SynastryAnalysis'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
 // Giriş yapmış kullanıcılar için koruma
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -81,6 +83,8 @@ const AnimatedRoutes = () => {
         <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route path="/" element={
             <ProtectedRoute>

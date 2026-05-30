@@ -61,7 +61,7 @@ const TellerProfile = () => {
             setShowFortuneModal(false);
             setFortuneImage(null);
             setFortuneImagePreview('');
-            showToast('Fal isteğin gönderildi! 100 Yıldız Tozu düşüldü.', 'success');
+            showToast('Fal isteğin gönderildi! 300 Yıldız Tozu düşüldü.', 'success');
             setQuestion('');
         } catch (err: any) {
             // Error managed by global interceptor
@@ -140,7 +140,7 @@ const TellerProfile = () => {
                             style={{ padding: '12px 24px', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-pink))' }}
                             onClick={() => setShowFortuneModal(true)}
                         >
-                            <Sparkles size={16} /> Fal İste (100 ★ Toz)
+                            <Sparkles size={16} /> Fal İste (300 ★ Toz)
                         </button>
                     </div>
                 </motion.div>
@@ -268,7 +268,7 @@ const TellerProfile = () => {
                             )}
                         </div>
 
-                        <div style={{ fontSize: 13, color: 'var(--accent-gold)', textAlign: 'center', marginBottom: 16 }}>Bu işlem 100 Yıldız Tozu tutarındadır.</div>
+                        <div style={{ fontSize: 13, color: 'var(--accent-gold)', textAlign: 'center', marginBottom: 16 }}>Bu işlem 300 Yıldız Tozu tutarındadır.</div>
 
                         <div style={{ display: 'flex', gap: 12 }}>
                             <button className="secondary-btn" style={{ flex: 1, padding: '12px 0' }} onClick={() => setShowFortuneModal(false)}>İptal</button>

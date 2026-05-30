@@ -106,3 +106,22 @@ export const deleteGalleryPhoto = async (req: Request, res: Response): Promise<a
         res.status(500).json({ message: 'Sunucu hatası' });
     }
 };
+
+export const uploadChatPhoto = async (req: Request, res: Response): Promise<any> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'Lütfen bir resim seçin' });
+        }
+
+        const photoUrl = `/uploads/${req.file.filename}`;
+        
+        // Chat fotoğrafları Photo (Galeri) tablosuna kaydedilmez, doğrudan mesajla birlikte kullanılmak üzere link döndürülür
+        res.json({ message: 'Sohbet resmi yüklendi', imageUrl: photoUrl });
+    } catch (error) {
+        console.error('Upload Chat Photo Error:', error);
+        res.status(500).json({ message: 'Sunucu hatası' });
+    }
+};

@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { UserRole } from '../enums/UserRole';
 
 let _io: Server | null = null;
+const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
 export function getSocketIo() {
     return _io;
@@ -37,6 +38,12 @@ export function setupSocket(io: Server) {
     io.on('connection', (socket) => {
         const userId = (socket as any).userId;
         logger.debug(`Socket user connected: ${userId} - ${socket.id}`);
+
+        // Eğer kullanıcının bekleyen bir kopma zamanlayıcısı varsa iptal et (30 saniye içinde geri döndü)
+        if (disconnectTimeouts.has(userId)) {
+            clearTimeout(disconnectTimeouts.get(userId)!);
+            disconnectTimeouts.delete(userId);
+        }
 
         // Set user as online
         prisma.user.update({
@@ -95,17 +102,15 @@ export function setupSocket(io: Server) {
             // Security check: Verify user is actually part of this room
             if (userId !== room.p1 && userId !== room.p2) return;
 
-            room.extraTimeRequests.add(userId);
+            if ((room.extensionsCount || 0) >= 2) {
+                socket.emit('queueStatus', { status: 'error', message: 'Maksimum uzatma sınırına (2) ulaştınız. Lütfen arkadaş ekleyin.' });
+                return;
+            }
 
-            if (room.extraTimeRequests.size === 2) {
-                // Both requested, grant 60s
-                const extended = matchmakingService.extendRoomTime(data.roomId, 60000);
-                if (extended) {
-                    io.to(data.roomId).emit('extraTimeGranted', { addedSeconds: 60 });
-                }
-            } else {
-                // Just notify the room that a user requested extra time
-                io.to(data.roomId).emit('extraTimeRequested', { byUserId: userId });
+            // Immediately grant +160s when requested by ANY user
+            const extended = matchmakingService.extendRoomTime(data.roomId, 160000);
+            if (extended) {
+                io.to(data.roomId).emit('extraTimeGranted', { addedSeconds: 160 });
             }
         });
 
@@ -195,20 +200,25 @@ export function setupSocket(io: Server) {
             }
         });
 
-        socket.on('disconnect', async () => {
-            logger.debug(`Socket disconnected: ${userId}`);
+        socket.on('disconnect', () => {
+            logger.debug(`Socket disconnected: ${userId}. Waiting 30s before marking offline.`);
             matchmakingService.removeFromQueue(userId);
 
-            try {
-                const now = new Date();
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: { isOnline: false, lastSeen: now }
-                });
-                io.emit('userStatusChanged', { userId, isOnline: false, lastSeen: now });
-            } catch (err) {
-                logger.error(`Error updating disconnect status for ${userId}:`, err);
-            }
+            const timeoutId = setTimeout(async () => {
+                try {
+                    const now = new Date();
+                    await prisma.user.update({
+                        where: { id: userId },
+                        data: { isOnline: false, lastSeen: now }
+                    });
+                    io.emit('userStatusChanged', { userId, isOnline: false, lastSeen: now });
+                    disconnectTimeouts.delete(userId);
+                } catch (err) {
+                    logger.error(`Error updating disconnect status for ${userId}:`, err);
+                }
+            }, 30000); // 30 saniye tolerans
+
+            disconnectTimeouts.set(userId, timeoutId);
         });
     });
 }

@@ -9,9 +9,19 @@ export const friendshipService = {
     checkIfFriends: async (userId1: string, userId2: string): Promise<boolean> => {
         const ab = await prisma.friendship.findFirst({ where: { user1Id: userId1, user2Id: userId2 } });
         const ba = await prisma.friendship.findFirst({ where: { user1Id: userId2, user2Id: userId1 } });
-        if (!ab || !ba) return false;
-        if (ab.expiresAt && ab.expiresAt <= new Date()) return false;
-        return true;
+        console.log(`🔍 [checkIfFriends] userId1=${userId1}, userId2=${userId2}`);
+        console.log(`🔍 [checkIfFriends] ab=`, ab ? { status: ab.status, expiresAt: ab.expiresAt } : 'NULL');
+        console.log(`🔍 [checkIfFriends] ba=`, ba ? { status: (ba as any).status, expiresAt: ba.expiresAt } : 'NULL');
+        if (!ab || !ba) {
+            console.log(`🔍 [checkIfFriends] RESULT: false (missing record)`);
+            return false;
+        }
+        if (ab.status === 'FRIEND' && ab.expiresAt === null) {
+            console.log(`🔍 [checkIfFriends] RESULT: TRUE (status=FRIEND, expiresAt=null)`);
+            return true;
+        }
+        console.log(`🔍 [checkIfFriends] RESULT: false (status=${ab.status}, expiresAt=${ab.expiresAt})`);
+        return false;
     },
 
     createFriendship: async (userId1: string, userId2: string) => {
@@ -450,19 +460,30 @@ export const friendshipService = {
     },
 
     getFriendRequestStatus: async (userId: string, targetId: string) => {
+        console.log(`🔍 [getFriendRequestStatus] userId=${userId}, targetId=${targetId}`);
         const areFriends = await friendshipService.checkIfFriends(userId, targetId);
-        if (areFriends) return { status: 'friends' };
+        if (areFriends) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: friends`);
+            return { status: 'friends' };
+        }
 
         const sentRequest = await prisma.friendRequest.findFirst({
             where: { senderId: userId, receiverId: targetId, status: 'PENDING' }
         });
-        if (sentRequest) return { status: 'sent', requestId: sentRequest.id };
+        if (sentRequest) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: sent`);
+            return { status: 'sent', requestId: sentRequest.id };
+        }
 
         const receivedRequest = await prisma.friendRequest.findFirst({
             where: { senderId: targetId, receiverId: userId, status: 'PENDING' }
         });
-        if (receivedRequest) return { status: 'received', requestId: receivedRequest.id };
+        if (receivedRequest) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: received`);
+            return { status: 'received', requestId: receivedRequest.id };
+        }
 
+        console.log(`🔍 [getFriendRequestStatus] RETURNING: none`);
         return { status: 'none' };
     }
 };

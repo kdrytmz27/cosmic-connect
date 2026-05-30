@@ -142,6 +142,7 @@ export const matchmakingService = {
             expiresAt,
             timeoutId,
             extraTimeRequests: new Set<string>(),
+            extensionsCount: 0,
             timeoutCallback
         });
 
@@ -169,6 +170,8 @@ export const matchmakingService = {
     extendRoomTime(roomId: string, extraMs: number) {
         const room = rooms.get(`room:${roomId}`);
         if (!room) return false;
+
+        room.extensionsCount = (room.extensionsCount || 0) + 1;
 
         const now = Date.now();
         const currentRemaining = Math.max(0, room.expiresAt - now);

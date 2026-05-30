@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { register, login, setup2FA, verify2FA } from '../controllers/auth.controller';
+import { register, login, setup2FA, verify2FA, forgotPassword, resetPassword } from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -14,6 +14,8 @@ const authLimiter = rateLimit({
 
 router.post('/register', authLimiter, register as any);
 router.post('/login', authLimiter, login as any);
+router.post('/forgot-password', authLimiter, forgotPassword as any);
+router.post('/reset-password', authLimiter, resetPassword as any);
 
 // 2FA Endpoints
 router.post('/2fa/setup', authenticate as any, setup2FA as any);

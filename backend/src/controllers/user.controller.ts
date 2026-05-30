@@ -253,9 +253,9 @@ export const getMessages = async (req: Request, res: Response) => {
 
 export const sendMessage = async (req: Request, res: Response) => {
     const userId = req.user?.userId;
-    const { receiverId, content } = req.body;
-    if (!userId || !receiverId || !content) throw new BadRequestError('Missing parameters');
+    const { receiverId, content, imageUrl, audioUrl } = req.body;
+    if (!userId || !receiverId) throw new BadRequestError('Missing parameters');
 
-    const msg = await messageService.sendMessage(userId, receiverId, content);
+    const msg = await messageService.sendMessage(userId, receiverId, content, imageUrl, audioUrl);
     res.json({ message: msg });
 };

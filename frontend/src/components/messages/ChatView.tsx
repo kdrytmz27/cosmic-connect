@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Send, Sparkles, Gift, Clock } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Gift, Clock, Image as ImageIcon, Loader } from 'lucide-react';
 import { BACKEND_URL } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
@@ -9,6 +9,7 @@ import type { IFriend, IMessage, IGift } from '../../types';
 import '../../styles/messages.css';
 import ExtendMatchModal from './ExtendMatchModal';
 import { majorArcana } from '../../data/tarot';
+import VoiceRecorder from '../common/VoiceRecorder';
 
 const GIFTS: IGift[] = [
     { id: 'CRYSTAL', emoji: '💎', cost: 50, name: 'Kristal' },
@@ -56,6 +57,82 @@ const ChatView: React.FC<ChatViewProps> = ({
     const [sendingGift, setSendingGift] = useState(false);
     const [showExtendModal, setShowExtendModal] = useState(false);
     const [extendTargetFriend, setExtendTargetFriend] = useState<IFriend | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [uploadingAudio, setUploadingAudio] = useState(false);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !activeChat) return;
+
+        setUploadingImage(true);
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+            const uploadRes = await api.post('/photo/chat', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const imageUrl = uploadRes.data.imageUrl;
+
+            // Now send the message with this imageUrl
+            const optimisticMsg: IMessage = {
+                id: Date.now().toString(),
+                senderId: userId || '',
+                receiverId: activeChat.id,
+                content: '',
+                imageUrl,
+                createdAt: new Date().toISOString()
+            };
+
+            setFriends(prev => prev.map(f => f.id === activeChat.id ? { ...f, lastMessage: optimisticMsg } : f));
+            // Trigger auto-scroll by forcing update
+            if (messagesEndRef.current) {
+                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }
+
+            await api.post('/user/messages', { receiverId: activeChat.id, content: '', imageUrl });
+        } catch (err) {
+            showToast('Fotoğraf gönderilemedi', 'error');
+        } finally {
+            setUploadingImage(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleAudioUpload = async (blob: Blob) => {
+        if (!activeChat) return;
+        setUploadingAudio(true);
+        const formData = new FormData();
+        formData.append('audio', blob, 'voice_message.webm');
+
+        try {
+            const uploadRes = await api.post('/audio/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const audioUrl = uploadRes.data.audioUrl;
+
+            const optimisticMsg: IMessage = {
+                id: Date.now().toString(),
+                senderId: userId || '',
+                receiverId: activeChat.id,
+                content: '',
+                audioUrl,
+                createdAt: new Date().toISOString()
+            };
+
+            setFriends(prev => prev.map(f => f.id === activeChat.id ? { ...f, lastMessage: optimisticMsg } : f));
+            if (messagesEndRef.current) {
+                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }
+
+            await api.post('/user/messages', { receiverId: activeChat.id, content: '', audioUrl });
+        } catch (err) {
+            showToast('Ses kaydı gönderilemedi', 'error');
+        } finally {
+            setUploadingAudio(false);
+        }
+    };
 
     const handleSendGift = async (giftId: string) => {
         if (!activeChat) return;
@@ -267,7 +344,15 @@ const ChatView: React.FC<ChatViewProps> = ({
                                 style={customStyles}
                             >
                                 {isGift && <span className="text-2xl" style={{ filter: `drop-shadow(0 0 5px ${giftColor})` }}>{giftEmoji}</span>}
-                                {content}
+                                {m.imageUrl && (
+                                    <img src={`${BACKEND_URL}${m.imageUrl}`} alt="Attachment" style={{ maxWidth: '200px', borderRadius: '8px', cursor: 'pointer', display: 'block', marginBottom: content ? '8px' : '0' }} onClick={() => window.open(`${BACKEND_URL}${m.imageUrl}`, '_blank')} />
+                                )}
+                                {m.audioUrl && (
+                                    <div style={{ marginBottom: content ? '8px' : '0' }}>
+                                        <audio controls src={`${BACKEND_URL}${m.audioUrl}`} style={{ height: 36, maxWidth: 220 }} />
+                                    </div>
+                                )}
+                                {content && <div>{content}</div>}
                             </motion.div>
                         )
                     })
@@ -325,6 +410,21 @@ const ChatView: React.FC<ChatViewProps> = ({
                         </div>
                     ) : (
                         <>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                style={{ display: 'none' }}
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                            />
+                            <button
+                                disabled={uploadingImage}
+                                onClick={() => fileInputRef.current?.click()}
+                                className="gift-toggle-btn"
+                                style={{ color: 'var(--text-secondary)' }}
+                            >
+                                {uploadingImage ? <Loader size={20} className="animate-spin" /> : <ImageIcon size={24} />}
+                            </button>
                             <button
                                 onClick={() => setShowGiftPicker(!showGiftPicker)}
                                 className="gift-toggle-btn"
@@ -335,18 +435,37 @@ const ChatView: React.FC<ChatViewProps> = ({
                             >
                                 <Gift size={24} />
                             </button>
-                            <form onSubmit={handleSendMessage} className="chat-input-form">
-                                <input
-                                    type="text"
-                                    value={messageInput}
-                                    onChange={handleMessageInputChange}
-                                    placeholder="Mesaj yaz..."
-                                    className="chat-input-field"
-                                />
-                                <button type="submit" disabled={!messageInput.trim()} className="chat-send-btn" style={{ color: messageInput.trim() ? 'var(--accent-pink)' : 'var(--text-secondary)' }}>
-                                    <Send size={24} />
-                                </button>
-                            </form>
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <form onSubmit={handleSendMessage} className="chat-input-form" style={{ flex: 1, display: messageInput.trim() ? 'flex' : 'none' }}>
+                                    <input
+                                        type="text"
+                                        value={messageInput}
+                                        onChange={handleMessageInputChange}
+                                        placeholder="Mesaj yaz..."
+                                        className="chat-input-field"
+                                    />
+                                    <button type="submit" disabled={!messageInput.trim()} className="chat-send-btn" style={{ color: messageInput.trim() ? 'var(--accent-pink)' : 'var(--text-secondary)' }}>
+                                        <Send size={24} />
+                                    </button>
+                                </form>
+                                {!messageInput.trim() && (
+                                    <>
+                                        <input
+                                            type="text"
+                                            value={messageInput}
+                                            onChange={handleMessageInputChange}
+                                            placeholder="Mesaj yaz..."
+                                            className="chat-input-field flex-1"
+                                            style={{ minWidth: 50 }}
+                                        />
+                                        <VoiceRecorder 
+                                            onRecordingComplete={handleAudioUpload} 
+                                            isUploading={uploadingAudio} 
+                                            maxDurationMs={180000} 
+                                        />
+                                    </>
+                                )}
+                            </div>
                         </>
                     )}
                 </div>

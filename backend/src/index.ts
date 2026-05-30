@@ -13,6 +13,7 @@ import tellerRoutes from './routes/teller.routes';
 import userRoutes from './routes/user.routes';
 import premiumRoutes from './routes/premium.routes';
 import photoRoutes from './routes/photo.routes';
+import audioRoutes from './routes/audio.routes';
 import groupRoutes from './routes/group.routes';
 import giftRoutes from './routes/gift.routes';
 import tarotRoutes from './routes/tarot.routes';
@@ -85,7 +86,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // limit each IP to 1000 requests per windowMs
+    max: 500, // limit each IP to 500 requests per windowMs
     message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
@@ -105,6 +106,7 @@ app.use('/api/teller', tellerRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/premium', premiumRoutes);
 app.use('/api/photo', photoRoutes);
+app.use('/api/audio', audioRoutes);
 app.use('/api/group', groupRoutes);
 app.use('/api/gift', giftRoutes);
 app.use('/api/tarot', tarotRoutes);

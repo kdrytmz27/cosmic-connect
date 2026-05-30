@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { prisma } from '../index';
 import { calculateSunSign, calculateMoonSign, calculateRisingSign } from '../utils/astrology';
 import { signToken } from '../utils/jwt';
+import { calculatePlanetaryPositions } from '../services/synastry.service';
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -60,6 +61,8 @@ export const register = async (req: Request, res: Response) => {
         const moonSign = calculateMoonSign(year, month, day);
         const risingSign = calculateRisingSign(birthTime, sunSign);
 
+        const planetPositions = calculatePlanetaryPositions(bDate, birthTime || '12:00');
+
         const passwordHash = await bcrypt.hash(password, 10);
 
         const role = UserRole.STANDARD; // Enforce STANDARD role for all new users to prevent Privilege Escalation
@@ -75,7 +78,8 @@ export const register = async (req: Request, res: Response) => {
                 role,
                 sunSign,
                 moonSign,
-                risingSign
+                risingSign,
+                planetPositions: planetPositions as any
             }
         });
 
@@ -217,6 +221,80 @@ export const verify2FA = async (req: Request, res: Response) => {
         }
     } catch (error) {
         console.error('2FA verification error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+import crypto from 'crypto';
+import { sendPasswordResetEmail } from '../utils/mailer';
+
+export const forgotPassword = async (req: Request, res: Response) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+        if (!user) {
+            // Güvenlik: Kullanıcı var mı yok mu belli etmiyoruz
+            return res.json({ message: 'If that email exists, a reset link has been sent.' });
+        }
+
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                resetToken: resetTokenHash,
+                resetTokenExpires: new Date(Date.now() + 60 * 60 * 1000) // 1 saat geçerli
+            }
+        });
+
+        await sendPasswordResetEmail(user.email, resetToken);
+
+        res.json({ message: 'If that email exists, a reset link has been sent.' });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+
+        if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+            return res.status(400).json({ error: 'Password must contain uppercase, lowercase, a number, and be at least 8 characters.' });
+        }
+
+        const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+        const user = await prisma.user.findFirst({
+            where: {
+                resetToken: resetTokenHash,
+                resetTokenExpires: { gt: new Date() }
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: 'Token is invalid or has expired' });
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                passwordHash,
+                resetToken: null,
+                resetTokenExpires: null
+            }
+        });
+
+        res.json({ message: 'Password reset successful. You can now login.' });
+    } catch (error) {
+        console.error('Reset password error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

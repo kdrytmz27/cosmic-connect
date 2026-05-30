@@ -20,8 +20,8 @@ model User {
   lookingForHobby   String?
   lookingForMusic   String?
   lookingForWeekend String?
-  gender            String?  @default("MALE")
-  interestedIn      String?  @default("FEMALE")
+  gender            String?
+  interestedIn      String?
   role              String   @default("STANDARD")
   birthDate         DateTime
   birthTime         String
@@ -30,6 +30,7 @@ model User {
   sunSign           String
   moonSign          String
   risingSign        String
+  planetPositions   Json?    // Meeus/Moshier ile bir kez hesaplanıp saklanacak (CPU optimizasyonu)
   stardustBalance   Int      @default(0)
   matchScore        Int      @default(100)
   cosmicStatus      String?
@@ -54,10 +55,14 @@ model User {
   xp              Int       @default(0)
   level           Int       @default(1)
   lastDailyTarot  DateTime?
-  badges          String    @default("[]")
+  badges          Json      @default("[]")
 
   // Push Notifications (FEAT-06) — stores Expo/Capacitor push token
   pushToken String?
+
+  // Password Reset fields
+  resetToken        String?
+  resetTokenExpires DateTime?
 
   // Daily Quests (FEAT-08)
   dailyQuestMatches  Int       @default(0)
@@ -118,7 +123,8 @@ model GroupMessage {
   roomId    String   // Zodiac sign name e.g., 'Aries'
   senderId  String
   sender    User     @relation("GroupSender", fields: [senderId], references: [id])
-  content   String
+  content   String?
+  imageUrl  String?
   createdAt DateTime @default(now())
 
   @@index([roomId])
@@ -144,7 +150,10 @@ model Message {
   id         String   @id @default(uuid())
   senderId   String
   receiverId String
-  content    String
+  content    String?
+  imageUrl   String?
+  audioUrl   String?
+  isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   sender   User @relation("SentMessages", fields: [senderId], references: [id])
@@ -163,10 +172,14 @@ model FortuneTeller {
   rating       Float  @default(0)
   reviewCount  Int    @default(0)
   fortuneTypes String @default("TAROT,KAHVE,EL")
+  
+  iban                 String?
+  withdrawableBalance  Int    @default(0) // Çekilebilir Yıldız Tozu veya TL karşılığı
 
   user         User            @relation(fields: [userId], references: [id])
   appointments Appointment[]
   comments     TellerComment[]
+  payouts      PayoutRequest[]
 }
 
 model Appointment {
@@ -179,6 +192,7 @@ model Appointment {
   fortuneType     String?  @default("TAROT")
   question        String?
   imageUrl        String?
+  audioUrl        String?
   interpretation  String?
   userRating      Int?
 
@@ -298,4 +312,19 @@ model ProcessedWebhook {
   id        String   @id @default(uuid())
   eventId   String   @unique
   createdAt DateTime @default(now())
+}
+
+model PayoutRequest {
+  id           String   @id @default(uuid())
+  tellerId     String
+  amount       Int      // Çekilmek istenen Yıldız Tozu miktarı
+  iban         String   // Gönderilecek IBAN
+  status       String   @default("PENDING") // PENDING, COMPLETED, REJECTED
+  createdAt    DateTime @default(now())
+  processedAt  DateTime?
+
+  teller       FortuneTeller @relation(fields: [tellerId], references: [id])
+
+  @@index([tellerId])
+  @@index([status])
 }
