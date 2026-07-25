@@ -1,23 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-    Mic, MicOff, Gift, X, Flame, Sparkles,
+    Mic, MicOff, Gift, X, Flame,
     LogOut, Lock, Unlock, Users, Minimize2,
     Settings2, Shield, FileText,
     MessageSquare, Hash, UserPlus, MoreVertical, Edit2, Trash2,
-    Dices, Scissors
+    Dices, Scissors, Trophy, Users2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { GiftAnimationOverlay } from '../components/party/GiftAnimationOverlay';
+import { GiftPanel } from '../components/party/GiftPanel';
+import { LuckyGiftResultModal } from '../components/party/LuckyGiftResultModal';
+import { RoomLeaderboardTab } from '../components/party/RoomLeaderboardTab';
+import { PkBattleBar } from '../components/party/pkbattle/PkBattleBar';
+import { FamilyBadge } from '../components/party/family/FamilyBadge';
+import { FamilyPanel } from '../components/party/family/FamilyPanel';
+import { buildGiftStreakKey } from '../utils/giftStreakKey';
 
 // TODO: Mikrofon/koltuk UI'ı şu an dekoratif - gerçek ses aktarımı (WebRTC/Agora/LiveKit) henüz entegre değil.
 export const PartyRoom: React.FC = () => {
     const { id: roomId } = useParams();
     const navigate = useNavigate();
     const { socket, setActivePartyRoom } = useSocket();
-    const { user, refreshUser } = useAuth();
+    const { user, refreshUser, stardustBalance: authStardustBalance } = useAuth();
     const { showToast } = useToast();
     
     const [roomState, setRoomState] = useState<any>(null);
@@ -27,11 +35,14 @@ export const PartyRoom: React.FC = () => {
     
     // UI Panels
     const [isGiftPanelOpen, setIsGiftPanelOpen] = useState(false);
+    const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
     const [isSeatMenuOpen, setIsSeatMenuOpen] = useState(false);
     const [isCloverMenuOpen, setIsCloverMenuOpen] = useState(false);
     const [isLuckyPackagePanelOpen, setIsLuckyPackagePanelOpen] = useState(false);
+    const [isRankingPanelOpen, setIsRankingPanelOpen] = useState(false);
+    const [isFamilyPanelOpen, setIsFamilyPanelOpen] = useState(false);
     const [luckyPackageAmount, setLuckyPackageAmount] = useState(100);
     const [luckyPackagePieces, setLuckyPackagePieces] = useState(5);
     const [selectedGiftTarget, setSelectedGiftTarget] = useState<string | null>(null);
@@ -39,16 +50,15 @@ export const PartyRoom: React.FC = () => {
     
     // Local Economy State
     const [localStardust, setLocalStardust] = useState<number>(0);
+    const localGiftStreaksRef = useRef<Map<string, { count: number, timeout: ReturnType<typeof setTimeout> }>>(new Map());
 
     const isOwner = roomState?.ownerId === user?.id;
     const isModerator = roomState?.moderators?.includes(user?.id);
     const hasPower = isOwner || isModerator;
 
     useEffect(() => {
-        if (user) {
-            setLocalStardust((user as any).stardustBalance || 0);
-        }
-    }, [user]);
+        setLocalStardust(authStardustBalance || 0);
+    }, [authStardustBalance]);
 
     const hasSyncedRef = React.useRef(false);
 
@@ -125,19 +135,26 @@ export const PartyRoom: React.FC = () => {
             }
         };
 
-        const handleGiftReceived = (data: { id: string, senderId: string, sender: { id: string, name: string, avatar: string }, receiverName?: string, receiverId: string, giftId: string, giftPrice: number, earnedDiamonds: number }) => {
-            setMessages(prev => [...prev.slice(-49), {
-                id: data.id,
-                sender: data.sender,
-                isSystem: true,
-                color: 'text-pink-400',
-                content: `${data.sender?.name || 'Biri'}, ${data.receiverName || 'birine'} bir hediye gönderdi! 🎁`
-            }]);
-            if (data.senderId === user?.id) {
-                showToast('Hediye gönderildi!', 'success');
-            } else if (data.receiverId === user?.id) {
-                showToast(`${data.sender?.name || 'Biri'} sana hediye gönderdi! +${data.earnedDiamonds} 💎`, 'success');
-            }
+        const handleGiftReceived = (data: { id: string, senderId: string, sender: { id: string, name: string, avatar: string }, receiverName?: string, receiverId: string, giftId: string, giftName?: string, giftPrice: number, comboCount?: number, earnedDiamonds: number }) => {
+            const combo = (data.comboCount ?? 1) > 1 ? ` x${data.comboCount}` : '';
+            const content = `${data.sender?.name || 'Biri'}, ${data.receiverName || 'birine'} ${data.giftName || 'bir hediye'} gönderdi!${combo} 🎁`;
+            setMessages(prev => {
+                // Rapid repeat-taps reuse the same id (escalating combo) - update that line in
+                // place instead of spamming a new chat entry (and colliding React keys) per tap.
+                const lastIndex = prev.length - 1;
+                if (lastIndex >= 0 && prev[lastIndex].id === data.id) {
+                    const next = [...prev];
+                    next[lastIndex] = { ...next[lastIndex], content };
+                    return next;
+                }
+                return [...prev.slice(-49), {
+                    id: data.id,
+                    sender: data.sender,
+                    isSystem: true,
+                    color: 'text-pink-400',
+                    content
+                }];
+            });
         };
 
         const handlePartyError = (data: { message?: string }) => {
@@ -334,6 +351,14 @@ export const PartyRoom: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-b from-[#0b1326]/80 via-[#0b1326]/40 to-[#0b1326]"></div>
             </div>
 
+            <GiftAnimationOverlay />
+            <LuckyGiftResultModal />
+            {isRankingPanelOpen && roomId && (
+                <RoomLeaderboardTab roomId={roomId} onClose={() => setIsRankingPanelOpen(false)} />
+            )}
+            {roomId && <PkBattleBar roomId={roomId} isOwner={isOwner} />}
+            {isFamilyPanelOpen && <FamilyPanel onClose={() => setIsFamilyPanelOpen(false)} />}
+
             {/* Header */}
             <div className="relative z-10 flex items-center justify-between p-4 bg-black/20 backdrop-blur-md border-b border-white/5">
                 <div className="flex items-center gap-3">
@@ -346,9 +371,9 @@ export const PartyRoom: React.FC = () => {
                         <h1 className="text-white font-bold text-sm line-clamp-1">{roomState.settings?.title}</h1>
                         <div className="flex items-center gap-2 text-xs text-white/50">
                             <span className="flex items-center gap-1"><Flame size={10} className="text-orange-500"/> {roomState.popularity}</span>
-                            <span className="flex items-center gap-1">
+                            <button onClick={() => setIsParticipantsOpen(true)} className="flex items-center gap-1 hover:text-white transition-colors">
                                 <Users size={10} className="text-blue-400"/> {roomState.participants.length}
-                            </span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -478,6 +503,18 @@ export const PartyRoom: React.FC = () => {
                                     }} className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-xl text-sm text-white/90 w-full text-left transition-colors">
                                         <Gift size={16} className="text-pink-400" /> Şanslı Paket
                                     </button>
+                                    <button onClick={() => {
+                                        setIsRankingPanelOpen(true);
+                                        setIsCloverMenuOpen(false);
+                                    }} className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-xl text-sm text-white/90 w-full text-left transition-colors">
+                                        <Trophy size={16} className="text-secondary" /> Oda Sıralaması
+                                    </button>
+                                    <button onClick={() => {
+                                        setIsFamilyPanelOpen(true);
+                                        setIsCloverMenuOpen(false);
+                                    }} className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-xl text-sm text-white/90 w-full text-left transition-colors">
+                                        <Users2 size={16} className="text-primary" /> Aile
+                                    </button>
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -599,36 +636,81 @@ export const PartyRoom: React.FC = () => {
                                 ))}
                             </div>
 
-                            {/* Gifts Grid */}
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-6">
-                                {[
-                                    { id: 'rose', name: 'Gül', price: 10, icon: '🌹' },
-                                    { id: 'kiss', name: 'Öpücük', price: 50, icon: '💋' },
-                                    { id: 'crown', name: 'Taç', price: 100, icon: '👑' },
-                                    { id: 'car', name: 'Spor Araba', price: 500, icon: '🏎️' },
-                                    { id: 'castle', name: 'Kozmik Şato', price: 5000, icon: '🏰' }
-                                ].map(gift => (
-                                    <div 
-                                        key={gift.id}
-                                        onClick={() => {
-                                            if (!selectedGiftTarget) {
-                                                showToast('Lütfen hediye göndermek için birini seçin', 'error');
-                                                return;
-                                            }
-                                            if (localStardust < gift.price) {
-                                                showToast('Yetersiz Yıldız Tozu bakiyesi', 'error');
-                                                return;
-                                            }
-                                            socket?.emit('sendPartyGift', { roomId, giftId: gift.id, targetUserId: selectedGiftTarget });
-                                            setIsGiftPanelOpen(false);
-                                        }}
-                                        className={`bg-white/5 rounded-xl p-3 flex flex-col items-center gap-2 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors ${localStardust < gift.price ? 'opacity-50' : ''}`}
-                                    >
-                                        <span className="text-3xl">{gift.icon}</span>
-                                        <span className="text-xs text-white/80">{gift.name}</span>
-                                        <div className="flex items-center gap-1 text-[#3cddc7] text-xs font-bold">
-                                            <Sparkles size={10} /> {gift.price}
+                            <GiftPanel
+                                localStardust={localStardust}
+                                onSend={(gift, quantity) => {
+                                    if (!selectedGiftTarget) {
+                                        showToast('Lütfen hediye göndermek için birini seçin', 'error');
+                                        return;
+                                    }
+
+                                    // Optimistic local animation - shows instantly instead of waiting on the
+                                    // server round trip (remote DB), then merges seamlessly with the real
+                                    // echo once it arrives (same deterministic streak key = same id).
+                                    const streakKey = buildGiftStreakKey(roomId || '', user?.id || '', selectedGiftTarget, gift.giftKey);
+                                    const streaks = localGiftStreaksRef.current;
+                                    const existing = streaks.get(streakKey);
+                                    if (existing) clearTimeout(existing.timeout);
+                                    const count = (existing?.count || 0) + quantity;
+                                    streaks.set(streakKey, { count, timeout: setTimeout(() => streaks.delete(streakKey), 2500) });
+
+                                    const targetParticipant = roomState?.participants?.find((p: any) => p.id === selectedGiftTarget);
+                                    window.dispatchEvent(new CustomEvent('localGiftSend', {
+                                        detail: {
+                                            id: streakKey,
+                                            senderId: user?.id,
+                                            sender: { id: user?.id, name: (user as any)?.name, avatar: (user as any)?.avatar },
+                                            receiverName: targetParticipant?.name,
+                                            receiverAvatar: targetParticipant?.avatar,
+                                            receiverId: selectedGiftTarget,
+                                            giftId: gift.giftKey,
+                                            giftKey: gift.giftKey,
+                                            comboCount: count,
+                                            giftName: gift.name,
+                                            giftIcon: gift.icon,
+                                            animationUrl: gift.animationUrl,
+                                            animationTier: gift.animationTier,
+                                            category: gift.category
+                                        }
+                                    }));
+
+                                    socket?.emit('sendPartyGift', { roomId, giftId: gift.giftKey, targetUserId: selectedGiftTarget, quantity });
+                                }}
+                            />
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* PARTICIPANTS LIST BOTTOM SHEET */}
+            <AnimatePresence>
+                {isParticipantsOpen && (
+                    <>
+                        <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={() => setIsParticipantsOpen(false)} className="fixed inset-0 bg-black/60 z-40" />
+                        <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}} className="fixed bottom-0 left-0 right-0 bg-[#131b2e] rounded-t-3xl z-50 p-6 shadow-2xl border-t border-white/10 pb-10 max-h-[70vh] flex flex-col">
+                            <div className="flex justify-between items-center mb-4 shrink-0">
+                                <h3 className="text-white font-semibold flex items-center gap-2">
+                                    <Users size={18} className="text-blue-400" /> Katılımcılar ({roomState.participants.length})
+                                </h3>
+                                <button onClick={() => setIsParticipantsOpen(false)} className="text-white/50 hover:text-white"><X size={20}/></button>
+                            </div>
+                            <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+                                {roomState.participants.map((p: any) => (
+                                    <div key={p.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-3">
+                                        <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.name}&background=random`} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white text-sm font-medium truncate flex items-center gap-1.5">
+                                                {p.name}
+                                                <FamilyBadge familyTag={p.familyTag} />
+                                            </div>
+                                            <div className="text-white/40 text-xs">Lv. {p.level || 1}</div>
                                         </div>
+                                        {p.id === roomState.ownerId && (
+                                            <span className="text-[10px] bg-secondary/20 text-secondary px-2 py-1 rounded-full font-bold shrink-0">Sahip</span>
+                                        )}
+                                        {p.id !== roomState.ownerId && roomState.moderators?.includes(p.id) && (
+                                            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-bold shrink-0">Moderatör</span>
+                                        )}
                                     </div>
                                 ))}
                             </div>

@@ -13,7 +13,10 @@
     "test:swarm": "ts-node src/scripts/qa-swarm-server.ts",
     "admin:create": "ts-node scripts/create-admin.ts",
     "admin:make-premium": "ts-node scripts/make-premium.ts",
-    "seed:dummy-users": "ts-node scripts/seed-dummy-users.ts"
+    "seed:dummy-users": "ts-node scripts/seed-dummy-users.ts",
+    "seed:party-gifts": "ts-node scripts/seed-party-gifts.ts",
+    "seed:lucky-odds": "ts-node scripts/seed-lucky-odds.ts",
+    "simulate:lucky-odds": "ts-node scripts/simulate-lucky-odds.ts"
   },
   "keywords": [],
   "author": "",

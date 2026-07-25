@@ -24,11 +24,14 @@ const Match = () => {
     useEffect(() => {
         if (!socket) return;
 
-        socket.on('queueStatus', (data) => {
-            console.log('Queue status:', data);
-        });
+        const handleQueueStatus = (data: { status: string, message?: string }) => {
+            if (data.status === 'error') {
+                setMatchState('idle');
+                showToast(data.message || 'Eşleşme kuyruğuna katılamadın.', 'error');
+            }
+        };
 
-        socket.on('matchFound', async (data) => {
+        const handleMatchFound = async (data: any) => {
             const otherId = data.users?.find((id: string) => String(id) !== String(userId));
             const enrichedData = { ...data, otherId };
             setPendingMatchData(enrichedData);
@@ -41,24 +44,30 @@ const Match = () => {
             } else {
                 setMatchedUser({ id: null, name: 'Gizemli Yabancı' });
             }
-        });
+        };
 
-        socket.on('chatEnded', () => {
+        const handleChatEnded = () => {
             resetMatch();
-        });
+        };
 
-        socket.on('partnerLeftRoom', () => {
+        const handlePartnerLeftRoom = () => {
             resetMatch();
             socket?.emit('leaveMatchmaking');
             showToast('Karşı taraftaki kişi eşleşmeden ayrıldı.', 'error');
-        });
+        };
+
+        socket.on('queueStatus', handleQueueStatus);
+        socket.on('matchFound', handleMatchFound);
+        socket.on('chatEnded', handleChatEnded);
+        socket.on('partnerLeftRoom', handlePartnerLeftRoom);
 
         return () => {
-            socket.off('queueStatus');
-            socket.off('matchFound');
-            socket.off('chatEnded');
-            socket.off('partnerLeftRoom');
+            socket.off('queueStatus', handleQueueStatus);
+            socket.off('matchFound', handleMatchFound);
+            socket.off('chatEnded', handleChatEnded);
+            socket.off('partnerLeftRoom', handlePartnerLeftRoom);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, userId]);
 
     // Match acceptance countdown

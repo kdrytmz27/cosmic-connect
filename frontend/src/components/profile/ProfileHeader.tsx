@@ -13,8 +13,6 @@ interface ProfileHeaderProps {
     hobby: string; setHobby: (val: string) => void;
     music: string; setMusic: (val: string) => void;
     weekend: string; setWeekend: (val: string) => void;
-    moonSign: string; setMoonSign: (val: string) => void;
-    risingSign: string; setRisingSign: (val: string) => void;
     handleSave: () => void;
     saving: boolean;
     uploadingAvatar: boolean;
@@ -25,7 +23,6 @@ export const ProfileHeader = ({
     isOwner, isEditing, setIsEditing, profile,
     name, setName, bio, setBio, hobby, setHobby,
     music, setMusic, weekend, setWeekend,
-    moonSign, setMoonSign, risingSign, setRisingSign,
     handleSave, saving, uploadingAvatar, handleAvatarUpload
 }: ProfileHeaderProps) => {
     return (
@@ -105,31 +102,6 @@ export const ProfileHeader = ({
                         className="bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm"
                     />
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="relative">
-                            <select
-                                value={moonSign}
-                                onChange={e => setMoonSign(e.target.value)}
-                                className="w-full bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm appearance-none"
-                            >
-                                <option value="" disabled>Ay Burcu</option>
-                                <option value="Aries">Koç</option><option value="Taurus">Boğa</option><option value="Gemini">İkizler</option><option value="Cancer">Yengeç</option><option value="Leo">Aslan</option><option value="Virgo">Başak</option><option value="Libra">Terazi</option><option value="Scorpio">Akrep</option><option value="Sagittarius">Yay</option><option value="Capricorn">Oğlak</option><option value="Aquarius">Kova</option><option value="Pisces">Balık</option>
-                            </select>
-                            <span className="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
-                        </div>
-                        <div className="relative">
-                            <select
-                                value={risingSign}
-                                onChange={e => setRisingSign(e.target.value)}
-                                className="w-full bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm appearance-none"
-                            >
-                                <option value="" disabled>Yükselen</option>
-                                <option value="Aries">Koç</option><option value="Taurus">Boğa</option><option value="Gemini">İkizler</option><option value="Cancer">Yengeç</option><option value="Leo">Aslan</option><option value="Virgo">Başak</option><option value="Libra">Terazi</option><option value="Scorpio">Akrep</option><option value="Sagittarius">Yay</option><option value="Capricorn">Oğlak</option><option value="Aquarius">Kova</option><option value="Pisces">Balık</option>
-                            </select>
-                            <span className="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
-                        </div>
-                    </div>
-
                     <div className="flex gap-3 justify-center mt-4">
                         <button 
                             onClick={() => setIsEditing(false)} 

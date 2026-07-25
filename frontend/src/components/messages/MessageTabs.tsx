@@ -306,23 +306,29 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({ requests, isPremium, f
 interface GroupsTabProps {
     zodiacSigns: IZodiacSign[];
     setActiveGroup: (group: string) => void;
+    userSunSign: string;
 }
 
-export const GroupsTab: React.FC<GroupsTabProps> = ({ zodiacSigns, setActiveGroup }) => {
+export const GroupsTab: React.FC<GroupsTabProps> = ({ zodiacSigns, setActiveGroup, userSunSign }) => {
     return (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>Burcunun gizli yetenekleriyle tanış veya ilgini çeken burçların odalarına katıl!</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>Kendi burcunun odasına katıl, burçdaşlarınla sohbet et!</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                {zodiacSigns.map(sign => (
-                    <div
-                        key={sign.id}
-                        onClick={() => setActiveGroup(sign.id)}
-                        className="glass-panel p-4 flex flex-col items-center justify-center gap-2 cursor-pointer text-center transition-all bg-transparent"
-                    >
-                        <div className="text-[32px] drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">{sign.emoji}</div>
-                        <h4 className="text-sm m-0 text-white">{sign.tr} Odası</h4>
-                    </div>
-                ))}
+                {zodiacSigns.map(sign => {
+                    const isOwn = sign.id === userSunSign;
+                    return (
+                        <div
+                            key={sign.id}
+                            onClick={() => isOwn && setActiveGroup(sign.id)}
+                            title={isOwn ? undefined : 'Sadece kendi burcunun odasına girebilirsin'}
+                            className={`glass-panel p-4 flex flex-col items-center justify-center gap-2 text-center transition-all bg-transparent relative ${isOwn ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+                        >
+                            {!isOwn && <span className="absolute top-2 right-2 text-xs">🔒</span>}
+                            <div className="text-[32px] drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">{sign.emoji}</div>
+                            <h4 className="text-sm m-0 text-white">{sign.tr} Odası</h4>
+                        </div>
+                    );
+                })}
             </div>
         </motion.div>
     );

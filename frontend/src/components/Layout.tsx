@@ -4,6 +4,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import { FloatingBubble } from './FloatingBubble';
+import { GlobalGiftBanner } from './GlobalGiftBanner';
 
 const Layout = () => {
     const { unreadCount, setUnreadCount, activePartyRoom } = useSocket();
@@ -199,6 +200,8 @@ const Layout = () => {
                     </span>
                 </Link>
             )}
+
+            <GlobalGiftBanner />
 
             {/* PARTY ROOM FLOATING BUBBLE */}
             {activePartyRoom && (

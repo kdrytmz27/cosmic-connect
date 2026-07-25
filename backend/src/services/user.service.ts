@@ -19,7 +19,7 @@ export class UserService {
                 sunSign: true, moonSign: true, risingSign: true,
                 birthDate: true, birthTime: true, latitude: true, longitude: true,
                 role: true, isPremium: true, level: true, xp: true, karma: true,
-                stardustBalance: true, matchScore: true, cosmicStatus: true,
+                stardustBalance: true, diamondBalance: true, matchScore: true, cosmicStatus: true,
                 hobby: true, music: true, weekend: true,
                 lookingForHobby: true, lookingForMusic: true, lookingForWeekend: true,
                 dailyMatchPasses: true, createdAt: true,
@@ -76,6 +76,7 @@ export class UserService {
 
                 // VULN 70 FIX: Now safe to wipe PII - synastry already computed above
                 (targetUser as any).stardustBalance = undefined;
+                (targetUser as any).diamondBalance = undefined;
                 (targetUser as any).matchScore = undefined;
                 (targetUser as any).email = undefined;
                 (targetUser as any).birthDate = undefined;

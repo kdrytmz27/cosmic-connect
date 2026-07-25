@@ -37,3 +37,7 @@ backend/uploads/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Claude Code - yerel makineye özel ayarlar (launch.json paylaşılır)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

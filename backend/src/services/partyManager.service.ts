@@ -14,6 +14,7 @@ export interface ParticipantInfo {
     name: string;
     avatar: string | null;
     level: number;
+    familyTag?: string | null;
 }
 
 export interface RoomSettings {
@@ -134,14 +135,18 @@ class PartyManagerService {
         try {
             const user = await prisma.user.findUnique({
                 where: { id: userId },
-                select: { id: true, name: true, avatar: true, level: true }
+                select: {
+                    id: true, name: true, avatar: true, level: true,
+                    familyMembership: { select: { family: { select: { name: true } } } }
+                }
             });
             if (user) {
                 room.participants.set(userId, {
                     id: user.id,
                     name: user.name || 'Kozmik Gezgin',
                     avatar: user.avatar,
-                    level: user.level
+                    level: user.level,
+                    familyTag: user.familyMembership?.family?.name || null
                 });
             } else {
                 room.participants.set(userId, {

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Hediye görsellerinin işlenmemiş halleri (scripts/clean-gift-artwork.mjs yedekleri)
+.artwork-originals
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

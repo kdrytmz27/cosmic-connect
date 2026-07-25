@@ -16,7 +16,6 @@ import { ProfileHoroscope } from '../components/profile/ProfileHoroscope';
 import { ProfileGallery } from '../components/profile/ProfileGallery';
 import { ProfileActions } from '../components/profile/ProfileActions';
 import { premiumApi } from '../api/premium';
-import { economyApi } from '../api/economy';
 import { NatalChart } from '../components/NatalChart';
 
 const COSMIC_STATUSES = [
@@ -49,8 +48,6 @@ const Profile = () => {
     const [hobby, setHobby] = useState('');
     const [music, setMusic] = useState('');
     const [weekend, setWeekend] = useState('');
-    const [moonSign, setMoonSign] = useState('');
-    const [risingSign, setRisingSign] = useState('');
     const [cosmicStatus, setCosmicStatus] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [friendStatus, setFriendStatus] = useState<any>(null);
@@ -102,21 +99,10 @@ const Profile = () => {
         finally { setSaving(false); }
     };
 
-    const handleSendGift = async () => {
-        if (!targetId) return;
-        setSaving(true);
-        try {
-            const res = await economyApi.sendGift(targetId, 100);
-            updateEconomy({ stardustBalance: res.data.remainingStardust });
-            showToast('100 Yıldız Tozu hediyeniz gönderildi! 🎁', 'success');
-        } catch (err) { }
-        finally { setSaving(false); }
-    };
-
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await api.put('/user/profile', { name, bio, hobby, music, weekend, moonSign, risingSign });
+            const res = await api.put('/user/profile', { name, bio, hobby, music, weekend });
             setProfile({ ...profile, profile: res.data.profile });
             showToast('Profil başarıyla güncellendi.', 'success');
             setIsEditing(false);
@@ -279,8 +265,6 @@ const Profile = () => {
                     hobby={hobby} setHobby={setHobby}
                     music={music} setMusic={setMusic}
                     weekend={weekend} setWeekend={setWeekend}
-                    moonSign={moonSign} setMoonSign={setMoonSign}
-                    risingSign={risingSign} setRisingSign={setRisingSign}
                     handleSave={handleSave}
                     saving={saving}
                     uploadingAvatar={uploadingAvatar}
@@ -460,7 +444,6 @@ const Profile = () => {
                             saving={saving}
                             handleSendLike={handleSendLike}
                             handleSuperLike={handleSuperLike}
-                            handleSendGift={handleSendGift}
                             handleBlock={handleBlock}
                             handleReport={handleReport}
                             navigate={navigate}

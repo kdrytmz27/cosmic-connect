@@ -137,6 +137,9 @@ const Messages = () => {
             api.get(`/group/${activeGroup}`).then(res => {
                 setGroupMessages(res.data.messages || []);
                 scrollToBottom();
+            }).catch(() => {
+                showToast('Bu odaya erişim yetkiniz yok - sadece kendi burcunun odasına girebilirsin.', 'error');
+                setActiveGroup(null);
             });
             socket?.emit('joinGroup', activeGroup);
             return () => { socket?.emit('leaveGroup', activeGroup); };
@@ -158,6 +161,8 @@ const Messages = () => {
                         senderId: msg.senderId,
                         receiverId: userId || '',
                         content: msg.content,
+                        imageUrl: msg.imageUrl,
+                        audioUrl: msg.audioUrl,
                         createdAt: new Date(msg.timestamp).toISOString()
                     }];
                 });
@@ -540,6 +545,7 @@ const Messages = () => {
                         <GroupsTab
                             zodiacSigns={ZODIAC_SIGNS}
                             setActiveGroup={setActiveGroup}
+                            userSunSign={user?.sunSign || ''}
                         />
                     )}
                 </AnimatePresence>

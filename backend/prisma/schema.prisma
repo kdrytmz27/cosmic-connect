@@ -105,6 +105,9 @@ model User {
   matchRooms1        MatchRoom[] @relation("MatchUser1")
   matchRooms2        MatchRoom[] @relation("MatchUser2")
   ownedParties       PartyRoom[]
+
+  ledFamilies        Family[]      @relation("FamilyLeader")
+  familyMembership   FamilyMember?
 }
 
 model Notification {
@@ -256,18 +259,101 @@ model TellerApplication {
 }
 
 model Gift {
-  id           String   @id @default(uuid())
-  senderId     String
-  receiverId   String
-  giftType     String
-  stardustCost Int
-  createdAt    DateTime @default(now())
+  id              String   @id @default(uuid())
+  senderId        String
+  receiverId      String
+  giftType        String
+  stardustCost    Int
+  roomId          String?
+  comboCount      Int      @default(1)
+  isLucky         Boolean  @default(false)
+  luckyMultiplier Float?
+  luckyWonAmount  Int?
+  createdAt       DateTime @default(now())
 
   sender   User @relation("SentGifts", fields: [senderId], references: [id])
   receiver User @relation("ReceivedGifts", fields: [receiverId], references: [id])
 
   @@index([senderId])
   @@index([receiverId])
+  @@index([roomId, createdAt])
+  @@index([receiverId, createdAt])
+}
+
+model LuckyGiftOddsTier {
+  id         String  @id @default(cuid())
+  label      String
+  weightPct  Float
+  multiplier Float
+  isActive   Boolean @default(true)
+  sortOrder  Int     @default(0)
+}
+
+model PartyGift {
+  id              String   @id @default(cuid())
+  giftKey         String   @unique
+  name            String
+  icon            String?
+  price           Int
+  category        String
+  animationUrl    String?
+  animationTier   String   @default("TOAST")
+  isLuckyEligible Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model PkBattle {
+  id           String    @id @default(cuid())
+  roomAId      String
+  roomBId      String
+  status       String    @default("PENDING")
+  durationSec  Int       @default(300)
+  startedAt    DateTime?
+  endsAt       DateTime?
+  scoreA       Int       @default(0)
+  scoreB       Int       @default(0)
+  winnerRoomId String?
+  createdAt    DateTime  @default(now())
+
+  @@index([roomAId])
+  @@index([roomBId])
+  @@index([status])
+}
+
+model Family {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  leaderId     String
+  avatarUrl    String?
+  announcement String?
+  level        Int      @default(1)
+  totalScore   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  leader  User           @relation("FamilyLeader", fields: [leaderId], references: [id])
+  members FamilyMember[]
+
+  @@index([leaderId])
+}
+
+model FamilyMember {
+  id                String   @id @default(cuid())
+  familyId          String
+  userId            String   @unique
+  role              String   @default("MEMBER")
+  contributionScore Int      @default(0)
+  joinedAt          DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([familyId])
 }
 
 model FriendRequest {

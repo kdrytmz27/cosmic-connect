@@ -9,7 +9,6 @@ interface ProfileActionsProps {
     saving: boolean;
     handleSendLike: () => void;
     handleSuperLike: () => void;
-    handleSendGift: () => void;
     handleBlock: () => void;
     handleReport: () => void;
     navigate: any;
@@ -24,7 +23,6 @@ export const ProfileActions = ({
     saving,
     handleSendLike,
     handleSuperLike,
-    handleSendGift,
     handleBlock,
     handleReport,
     navigate,
@@ -111,24 +109,6 @@ export const ProfileActions = ({
                     >
                         <Sparkles size={16} color="var(--accent-gold)" />
                         Süper Beğeni
-                    </motion.button>
-
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleSendGift}
-                        disabled={saving}
-                        style={{
-                            flex: 1, padding: '12px', borderRadius: 16,
-                            background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(126,34,206,0.15))',
-                            border: '1px solid rgba(168,85,247,0.3)',
-                            color: 'white', cursor: 'pointer', fontWeight: 'bold', fontSize: 13,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            transition: 'all 0.3s'
-                        }}
-                    >
-                        <span style={{ fontSize: 16 }}>🎁</span>
-                        100 Toz Gönder
                     </motion.button>
                 </div>
             )}

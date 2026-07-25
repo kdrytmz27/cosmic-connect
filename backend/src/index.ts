@@ -19,9 +19,12 @@ import giftRoutes from './routes/gift.routes';
 import tarotRoutes from './routes/tarot.routes';
 import adminRoutes from './routes/admin.routes';
 import questRoutes from './routes/quest.routes';
+import familyRoutes from './routes/family.routes';
 
 import { setupSocket } from './controllers/socket.controller';
 import { startHoroscopeCron } from './services/horoscope.cron';
+import { giftCatalogService } from './services/giftCatalog.service';
+import { luckyGiftService } from './services/luckyGift.service';
 import { logger } from './utils/logger';
 
 // --- SAFETY NETS (Yakalanmayan Hatalar) ---
@@ -114,6 +117,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notification', notificationRoutes);
 app.use('/api/quests', questRoutes);
 app.use('/api/party', partyRoutes);
+app.use('/api/family', familyRoutes);
 
 app.use('/api/revenuecat', revenuecatRoutes);
 
@@ -141,6 +145,12 @@ async function bootstrap() {
     try {
         await prisma.user.updateMany({ data: { isOnline: false } });
         logger.info('Tüm hayalet online profiller çevrimdışına çekildi.');
+
+        await giftCatalogService.initialize();
+        logger.info('Parti hediye kataloğu yüklendi.');
+
+        await luckyGiftService.initialize();
+        logger.info('Şanslı hediye oran tablosu yüklendi.');
 
         httpServer.listen(PORT, () => {
             logger.info(`Server listening on port ${PORT}`);

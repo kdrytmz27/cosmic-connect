@@ -72,6 +72,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
     }, []);
 
+    // stardustBalance is the field components should read for live balance updates
+    // (updateEconomy keeps it current after in-app actions) - keep it seeded from
+    // user whenever user itself refreshes (login/refreshUser), so it never starts stale.
+    useEffect(() => {
+        if (user && typeof user.stardustBalance === 'number') {
+            setStardustBalance(user.stardustBalance);
+        }
+    }, [user]);
+
     const updateEconomy = (updates: EconomyUpdate) => {
         if (updates.stardustBalance !== undefined) setStardustBalance(updates.stardustBalance);
         if (updates.isPremium !== undefined) setIsPremium(updates.isPremium);

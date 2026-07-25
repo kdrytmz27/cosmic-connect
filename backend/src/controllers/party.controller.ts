@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { rankingService } from '../services/ranking.service';
 
 export const getPartyRooms = async (req: Request, res: Response) => {
     try {
@@ -78,5 +79,16 @@ export const getPartyRoomById = async (req: Request, res: Response) => {
         res.json(room);
     } catch (error) {
         res.status(500).json({ error: 'Oda bilgisi getirilemedi.' });
+    }
+};
+
+export const getPartyRoomRanking = async (req: Request, res: Response) => {
+    try {
+        const roomId = req.params.id as string;
+        const window = req.query.window === 'weekly' ? 'weekly' : 'daily';
+        const ranking = await rankingService.getRoomRanking(roomId, window);
+        res.json({ ranking, window });
+    } catch (error) {
+        res.status(500).json({ error: 'Sıralama getirilemedi.' });
     }
 };

@@ -23,7 +23,7 @@ async function main() {
 
     for (let i = 1; i <= 30; i++) {
         const email = `user${i}@cosmic.com`;
-        const name = names[i - 1];
+        const name = names[i - 1] ?? `Kullanıcı ${i}`;
         const gender = i % 2 === 0 ? 'MALE' : 'FEMALE';
         const year = 1990 + (i % 12);
         const month = ((i - 1) % 12) + 1;
@@ -41,9 +41,9 @@ async function main() {
                 birthTime: `${String(8 + (i % 12)).padStart(2, '0')}:00`,
                 latitude: 41.0082 + (i * 0.01),
                 longitude: 28.9784 + (i * 0.01),
-                sunSign: sunSigns[i % 12],
-                moonSign: moonSigns[i % 12],
-                risingSign: risingSigns[i % 12],
+                sunSign: sunSigns[i % 12]!,
+                moonSign: moonSigns[i % 12]!,
+                risingSign: risingSigns[i % 12]!,
                 gender,
                 interestedIn: gender === 'MALE' ? 'FEMALE' : 'MALE',
                 stardustBalance: 500,

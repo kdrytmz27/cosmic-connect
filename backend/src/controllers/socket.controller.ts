@@ -6,7 +6,9 @@ import { partyManager } from '../services/partyManager.service';
 import { prisma } from '../index';
 import { logger } from '../utils/logger';
 import { UserRole } from '../enums/UserRole';
-import { PARTY_GIFTS } from '../config/gifts';
+import { giftCatalogService } from '../services/giftCatalog.service';
+import { luckyGiftService } from '../services/luckyGift.service';
+import { pkBattleService } from '../services/pkBattle.service';
 
 let _io: Server | null = null;
 const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
@@ -25,6 +27,53 @@ interface LuckyPackage {
     expiresAt: number;
 }
 const activeLuckyPackages = new Map<string, LuckyPackage>();
+
+// Serializes sendPartyGift per-user instead of letting concurrent transactions on the same
+// User row lock-contend (which could exceed Prisma's transaction timeout under rapid taps).
+// Every send is queued and processed in order - nothing is dropped, just sequenced.
+const giftSendInFlight = new Set<string>();
+const giftSendQueues = new Map<string, Array<() => Promise<void>>>();
+
+function enqueueGiftSend(uid: string, task: () => Promise<void>) {
+    const queue = giftSendQueues.get(uid) ?? [];
+    queue.push(task);
+    giftSendQueues.set(uid, queue);
+    processGiftSendQueue(uid);
+}
+
+function processGiftSendQueue(uid: string) {
+    if (giftSendInFlight.has(uid)) return;
+    const queue = giftSendQueues.get(uid);
+    const task = queue?.shift();
+    if (!task) return;
+    giftSendInFlight.add(uid);
+    task().finally(() => {
+        giftSendInFlight.delete(uid);
+        processGiftSendQueue(uid);
+    });
+}
+
+// Rapid repeat-taps of the same gift on the same target within this window are visually
+// merged into one escalating combo (x2, x3, x4...) instead of stacking separate animations.
+// Each tap is still its own real transaction/Gift row - this only affects the emitted event id
+// and comboCount so the frontend can recognize "this is the same streak continuing".
+// The streak key itself IS the emitted event id (not a random one) - the sender's own client
+// computes this exact same key to show an optimistic animation instantly, before this server
+// round trip completes, and the two merge seamlessly once this echo arrives.
+interface GiftStreak {
+    count: number;
+    timeout: NodeJS.Timeout;
+}
+const giftStreaks = new Map<string, GiftStreak>();
+const buildGiftStreakKey = (roomId: string, senderId: string, targetUserId: string, giftId: string) =>
+    `giftstreak:${roomId}:${senderId}:${targetUserId}:${giftId}`;
+const STREAK_WINDOW_MS = 2500;
+
+// Global gift banner - only for high-value gifts, debounced app-wide so a burst of big gifts
+// doesn't spam every user's screen with back-to-back banners.
+let lastGiftBannerAt = 0;
+const GIFT_BANNER_COOLDOWN_MS = 5000;
+const GIFT_BANNER_LUCKY_MULTIPLIER_THRESHOLD = 100;
 
 export function getSocketIo() {
     return _io;
@@ -86,6 +135,7 @@ export function setupSocket(io: Server) {
         slotManager.initialize(io);
     }
     partyManager.initialize(io);
+    pkBattleService.initialize(io);
 
     io.on('connection', (socket) => {
         const userId = (socket as any).userId;
@@ -388,6 +438,72 @@ export function setupSocket(io: Server) {
             }
         });
 
+        // ================= PK BATTLE ================= //
+        socket.on('pkBattleInvite', async (data: { roomId: string, targetRoomId: string }) => {
+            if (!userId) return;
+            const state = partyManager.getRoom(data.roomId);
+            if (!state || state.ownerId !== userId) {
+                socket.emit('partyError', { message: 'Sadece oda sahibi PK Battle başlatabilir.' });
+                return;
+            }
+            if (pkBattleService.getActiveBattleForRoom(data.roomId)) {
+                socket.emit('partyError', { message: 'Odanız zaten bir PK Battle içinde.' });
+                return;
+            }
+            if (pkBattleService.getActiveBattleForRoom(data.targetRoomId)) {
+                socket.emit('partyError', { message: 'Hedef oda zaten bir PK Battle içinde.' });
+                return;
+            }
+            const targetRoom = await prisma.partyRoom.findUnique({ where: { id: data.targetRoomId } });
+            if (!targetRoom || !targetRoom.isActive) {
+                socket.emit('partyError', { message: 'Hedef oda bulunamadı.' });
+                return;
+            }
+
+            const invite = await pkBattleService.createInvite(data.roomId, data.targetRoomId);
+            const fromRoom = await prisma.partyRoom.findUnique({ where: { id: data.roomId }, select: { title: true, coverUrl: true } });
+            io.to(targetRoom.ownerId).emit('pkBattleInviteReceived', {
+                battleId: invite.battleId,
+                fromRoomId: data.roomId,
+                fromRoomTitle: fromRoom?.title,
+                fromRoomCover: fromRoom?.coverUrl
+            });
+            socket.emit('pkBattleInviteSent', { battleId: invite.battleId, targetRoomId: data.targetRoomId });
+        });
+
+        socket.on('pkBattleAccept', async (data: { battleId: string }) => {
+            if (!userId) return;
+            const invite = pkBattleService.getPendingInvite(data.battleId);
+            if (!invite) {
+                socket.emit('partyError', { message: 'Bu davet artık geçerli değil.' });
+                return;
+            }
+            const targetRoomState = partyManager.getRoom(invite.roomBId);
+            if (!targetRoomState || targetRoomState.ownerId !== userId) {
+                socket.emit('partyError', { message: 'Bu daveti sadece hedef odanın sahibi kabul edebilir.' });
+                return;
+            }
+            const battle = await pkBattleService.startBattle(data.battleId);
+            if (!battle) return;
+            io.to(`party_${battle.roomAId}`).to(`party_${battle.roomBId}`).emit('pkBattleStart', {
+                battleId: battle.battleId,
+                roomAId: battle.roomAId,
+                roomBId: battle.roomBId,
+                endsAt: battle.endsAt
+            });
+        });
+
+        socket.on('pkBattleDecline', async (data: { battleId: string }) => {
+            if (!userId) return;
+            const invite = pkBattleService.getPendingInvite(data.battleId);
+            if (!invite) return;
+            const targetRoomState = partyManager.getRoom(invite.roomBId);
+            if (!targetRoomState || targetRoomState.ownerId !== userId) return;
+            pkBattleService.cancelInvite(data.battleId);
+            await prisma.pkBattle.update({ where: { id: data.battleId }, data: { status: 'CANCELLED' } }).catch(() => {});
+            io.to(`party_${invite.roomAId}`).emit('pkBattleDeclined', { battleId: data.battleId });
+        });
+
         // ================= GAMES ================= //
         socket.on('sendPartyDice', async (data: { roomId: string }) => {
             if (!userId) return;
@@ -571,7 +687,7 @@ export function setupSocket(io: Server) {
             });
         });
 
-        socket.on('sendPartyGift', async (data: { roomId: string, giftId: string, targetUserId: string }) => {
+        socket.on('sendPartyGift', async (data: { roomId: string, giftId: string, targetUserId: string, quantity?: number }) => {
             if (!userId || !data.targetUserId || !data.roomId) return;
 
             const room = partyManager.getRoom(data.roomId);
@@ -580,78 +696,160 @@ export function setupSocket(io: Server) {
                 return;
             }
 
-            const catalogGift = PARTY_GIFTS[data.giftId];
+            const catalogGift = giftCatalogService.getGift(data.giftId);
             if (!catalogGift) {
                 socket.emit('partyError', { message: 'Geçersiz hediye.' });
                 return;
             }
+
+            // Self-gift is blocked specifically for lucky-eligible gifts - EV<1 alone isn't
+            // enough protection against farming attempts, and this closes that door entirely.
+            if (catalogGift.isLuckyEligible && userId === data.targetUserId) {
+                socket.emit('partyError', { message: 'Şanslı hediyeleri kendinize gönderemezsiniz.' });
+                return;
+            }
+
+            enqueueGiftSend(userId, async () => {
+            // Combo/bulk-send: quantity must be a sane whole number, capped to prevent abuse
+            const quantity = Number.isInteger(data.quantity) && (data.quantity as number) >= 1 && (data.quantity as number) <= 100
+                ? (data.quantity as number)
+                : 1;
             const giftPrice = catalogGift.price;
+            const totalCost = giftPrice * quantity;
+
+            // Lucky roll happens once per send (not per unit in the combo) - rolled before the
+            // transaction since it needs no DB access, then applied atomically inside it.
+            const luckyRoll = catalogGift.isLuckyEligible ? luckyGiftService.roll() : null;
+            const luckyWonAmount = luckyRoll ? Math.floor(totalCost * luckyRoll.multiplier) : 0;
+
+            const selectFields = { id: true, name: true, avatar: true, stardustBalance: true, diamondBalance: true };
 
             try {
-                const earned = Math.floor(giftPrice * 0.3);
+                const earned = Math.floor(totalCost * 0.3);
 
-                // Prisma Transaction: Deduct from sender, add 30% diamonds to receiver
-                await prisma.$transaction(async (tx) => {
-                    const sender = await tx.user.findUnique({ where: { id: userId } });
-                    if (!sender || (sender.stardustBalance || 0) < giftPrice) {
+                // Prisma Transaction: Deduct from sender, add 30% diamonds to receiver.
+                // The balance check is fused into the decrement itself (atomic conditional
+                // update) rather than a separate findUnique, and every write below returns the
+                // fresh row via `select` so no extra round trips are needed after commit -
+                // both matter for keeping this fast under rapid combo/repeat taps. Returning the
+                // results from the transaction (rather than mutating outer variables from inside
+                // the closure) keeps the types simple and avoids relying on closure narrowing.
+                const { senderFresh, receiverFresh } = await prisma.$transaction(async (tx) => {
+                    const deducted = await tx.user.updateMany({
+                        where: { id: userId, stardustBalance: { gte: totalCost } },
+                        data: { stardustBalance: { decrement: totalCost } }
+                    });
+                    if (deducted.count === 0) {
                         throw new Error('Yetersiz Yıldız Tozu bakiyesi! Hediye göndermek için bakiye yükleyin.');
                     }
 
+                    let sender;
+                    let receiver;
+
                     if (userId === data.targetUserId) {
-                        // Self-gift: deduct stardust, add diamonds
-                        await tx.user.update({
+                        // Self-gift: diamonds go to the same account
+                        sender = await tx.user.update({
                             where: { id: userId },
-                            data: {
-                                stardustBalance: { decrement: giftPrice },
-                                diamondBalance: { increment: earned }
-                            }
+                            data: { diamondBalance: { increment: earned } },
+                            select: selectFields
                         });
+                        receiver = sender;
                     } else {
-                        // Gift to other user
-                        await tx.user.update({
-                            where: { id: userId },
-                            data: { stardustBalance: { decrement: giftPrice } }
-                        });
-                        await tx.user.update({
+                        receiver = await tx.user.update({
                             where: { id: data.targetUserId },
-                            data: { diamondBalance: { increment: earned } }
+                            data: { diamondBalance: { increment: earned } },
+                            select: selectFields
                         });
                     }
 
-                    // Create Gift log
+                    // Credit any lucky-gift winnings back to the sender
+                    if (luckyWonAmount > 0) {
+                        sender = await tx.user.update({
+                            where: { id: userId },
+                            data: { stardustBalance: { increment: luckyWonAmount } },
+                            select: selectFields
+                        });
+                    } else if (!sender) {
+                        sender = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: selectFields });
+                    }
+
+                    // Create Gift log - one row for the whole combo batch
                     await tx.gift.create({
                         data: {
                             senderId: userId,
                             receiverId: data.targetUserId,
                             giftType: data.giftId,
-                            stardustCost: giftPrice
+                            stardustCost: totalCost,
+                            comboCount: quantity,
+                            roomId: data.roomId,
+                            isLucky: !!luckyRoll,
+                            luckyMultiplier: luckyRoll ? luckyRoll.multiplier : null,
+                            luckyWonAmount: luckyRoll ? luckyWonAmount : null
                         }
                     });
-                });
 
-                // Fetch fresh balances from DB AFTER transaction
-                const senderFresh = await prisma.user.findUnique({ 
-                    where: { id: userId }, 
-                    select: { id: true, name: true, avatar: true, stardustBalance: true, diamondBalance: true } 
-                });
-                const receiverFresh = await prisma.user.findUnique({ 
-                    where: { id: data.targetUserId }, 
-                    select: { id: true, name: true, avatar: true, stardustBalance: true, diamondBalance: true } 
-                });
-                
+                    // If the sender belongs to a Family, their gift spend counts toward it too -
+                    // a single optional extra write, costs nothing for users with no family.
+                    const familyMembership = await tx.familyMember.findUnique({ where: { userId } });
+                    if (familyMembership) {
+                        await tx.family.update({
+                            where: { id: familyMembership.familyId },
+                            data: { totalScore: { increment: totalCost } }
+                        });
+                        await tx.familyMember.update({
+                            where: { userId },
+                            data: { contributionScore: { increment: totalCost } }
+                        });
+                    }
+
+                    return { senderFresh: sender, receiverFresh: receiver };
+                }, { timeout: 10000, maxWait: 5000 });
+
                 // Add popularity to room
-                partyManager.addPopularity(data.roomId, Math.floor(giftPrice / 10));
+                partyManager.addPopularity(data.roomId, Math.floor(totalCost / 10));
+
+                // If this room is in an active PK Battle, count this gift toward its live score
+                const pkScoreResult = pkBattleService.addScore(data.roomId, totalCost);
+                if (pkScoreResult) {
+                    io.to(`party_${pkScoreResult.battle.roomAId}`).to(`party_${pkScoreResult.battle.roomBId}`).emit('pkBattleScoreUpdate', {
+                        battleId: pkScoreResult.battle.battleId,
+                        scoreA: pkScoreResult.battle.scoreA,
+                        scoreB: pkScoreResult.battle.scoreB,
+                        remainingSec: pkScoreResult.remainingSec
+                    });
+                }
+
+                // Merge rapid repeat-taps of the same gift/target into one escalating streak
+                const streakKey = buildGiftStreakKey(data.roomId, userId, data.targetUserId, data.giftId);
+                let streak = giftStreaks.get(streakKey);
+                if (streak) {
+                    clearTimeout(streak.timeout);
+                    streak.count += quantity;
+                } else {
+                    streak = { count: quantity } as GiftStreak;
+                    giftStreaks.set(streakKey, streak);
+                }
+                streak.timeout = setTimeout(() => giftStreaks.delete(streakKey), STREAK_WINDOW_MS);
 
                 // Broadcast gift event to entire room (with senderId for frontend identification)
                 io.to(`party_${data.roomId}`).emit('partyGiftReceived', {
-                    id: Date.now().toString(),
+                    id: streakKey,
                     senderId: userId,
                     sender: { id: senderFresh?.id, name: senderFresh?.name, avatar: senderFresh?.avatar },
                     receiverName: receiverFresh?.name,
+                    receiverAvatar: receiverFresh?.avatar,
                     receiverId: data.targetUserId,
                     giftId: data.giftId,
+                    giftKey: catalogGift.giftKey,
                     giftPrice: giftPrice,
-                    earnedDiamonds: earned
+                    comboCount: streak.count,
+                    totalCost,
+                    earnedDiamonds: earned,
+                    giftName: catalogGift.name,
+                    giftIcon: catalogGift.icon,
+                    animationUrl: catalogGift.animationUrl,
+                    animationTier: catalogGift.animationTier,
+                    category: catalogGift.category
                 });
 
                 // Send updated balance DIRECTLY to sender's personal room
@@ -660,6 +858,34 @@ export function setupSocket(io: Server) {
                     stardustBalance: senderFresh?.stardustBalance ?? 0,
                     diamondBalance: senderFresh?.diamondBalance ?? 0
                 });
+
+                // Lucky-gift result is private to the sender - the room only sees the normal gift animation
+                if (luckyRoll) {
+                    io.to(userId).emit('partyLuckyGiftResult', {
+                        giftId: data.giftId,
+                        giftName: catalogGift.name,
+                        multiplier: luckyRoll.multiplier,
+                        wonAmount: luckyWonAmount,
+                        totalCost
+                    });
+                }
+
+                // Global banner for high-value gifts (LUKS category or a big lucky win),
+                // debounced app-wide so a burst of big gifts doesn't spam every screen.
+                const isBannerWorthy = catalogGift.category === 'LUKS'
+                    || (!!luckyRoll && luckyRoll.multiplier >= GIFT_BANNER_LUCKY_MULTIPLIER_THRESHOLD);
+                if (isBannerWorthy && Date.now() - lastGiftBannerAt > GIFT_BANNER_COOLDOWN_MS) {
+                    lastGiftBannerAt = Date.now();
+                    io.emit('globalGiftBanner', {
+                        senderName: senderFresh?.name || 'Biri',
+                        receiverName: receiverFresh?.name || 'birine',
+                        giftName: catalogGift.name,
+                        giftIcon: catalogGift.icon,
+                        comboCount: streak.count,
+                        isLucky: !!luckyRoll,
+                        multiplier: luckyRoll?.multiplier
+                    });
+                }
 
                 // Send updated balance to receiver (if different person)
                 if (userId !== data.targetUserId) {
@@ -670,11 +896,12 @@ export function setupSocket(io: Server) {
                     });
                 }
 
-                logger.info(`Gift sent: ${userId} -> ${data.targetUserId} | ${data.giftId} | -${giftPrice} stardust | +${earned} diamonds`);
+                logger.info(`Gift sent: ${userId} -> ${data.targetUserId} | ${data.giftId} x${quantity} | -${totalCost} stardust | +${earned} diamonds`);
             } catch (e: any) {
                 logger.error('Gift error:', e.message);
                 socket.emit('partyError', { message: e.message || 'Hediye gönderilemedi' });
             }
+            });
         });
         // ===========================
 

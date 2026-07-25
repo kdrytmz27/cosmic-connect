@@ -11,6 +11,22 @@ export const buyPremium = async (req: Request, res: Response) => {
     return res.status(403).json({ error: 'Lütfen satın alımları mobil uygulama üzerinden yapın. (Yetkisiz API kullanımı)' });
 };
 
+// TEST ONLY - remove this endpoint (and its route + Market.tsx button) once manual QA is done.
+// Disabled outside development so it can never be reachable in a deployed environment.
+export const devAddStardust = async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ error: 'Not available in production' });
+    }
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = await prisma.user.update({
+        where: { id: userId },
+        data: { stardustBalance: { increment: 10000 } }
+    });
+    res.json({ stardustBalance: user.stardustBalance, diamondBalance: user.diamondBalance });
+};
+
 export const recordSwipe = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;

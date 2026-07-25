@@ -70,13 +70,8 @@ class SlotMachineManager {
         if (this.bets.length === 0) return;
 
         for (const bet of this.bets) {
-            let win = false;
-            let push = false;
-
-            // VULN 60 FIX: sum === 14 is a PUSH (tie) - no one wins or loses
-            if (bet.betType === 'BIG' && sum > 14) win = true;
-            if (bet.betType === 'SMALL' && sum < 14) win = true;
-            if (sum === 14) push = true;
+            // No tie: 13 and below is SMALL, above 13 is BIG.
+            const win = (bet.betType === 'BIG' && sum > 13) || (bet.betType === 'SMALL' && sum <= 13);
 
             try {
                 if (win) {
@@ -86,13 +81,6 @@ class SlotMachineManager {
                         data: { stardustBalance: { increment: payout } }
                     });
                     this.io?.to(bet.userId).emit('slot:result', { win: true, payout, newBalance: dbUser.stardustBalance });
-                } else if (push) {
-                    // VULN 60 FIX: Refund bet on push (tie at sum=14)
-                    const dbUser = await prisma.user.update({
-                        where: { id: bet.userId },
-                        data: { stardustBalance: { increment: bet.betAmount } }
-                    });
-                    this.io?.to(bet.userId).emit('slot:result', { win: false, push: true, refund: bet.betAmount, newBalance: dbUser.stardustBalance });
                 } else {
                     const dbUser = await prisma.user.findUnique({ where: { id: bet.userId } });
                     this.io?.to(bet.userId).emit('slot:result', { win: false, lost: bet.betAmount, newBalance: dbUser?.stardustBalance || 0 });

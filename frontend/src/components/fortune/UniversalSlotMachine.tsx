@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export const UniversalSlotMachine = () => {
     const { showToast } = useToast();
-    const { updateEconomy, stardustBalance } = useAuth();
+    const { updateEconomy } = useAuth();
     
     const [gameState, setGameState] = useState<{ state: 'BETTING' | 'ROLLING' | 'RESULT', timeLeft: number, result?: any }>({ state: 'BETTING', timeLeft: 26 });
     const [myBet, setMyBet] = useState<{ amount: number, type: string } | null>(null);
@@ -45,14 +45,17 @@ export const UniversalSlotMachine = () => {
         socket.on('slot:result', (data) => {
             if (data.win) {
                 setGameResultMsg(`Kazandın! (+${data.payout} Toz)`);
-                updateEconomy({ stardustBalance: stardustBalance + data.payout });
             } else {
                 setGameResultMsg(`Kaybettin! (-${data.lost} Toz)`);
+            }
+            if (data.newBalance !== undefined) {
+                updateEconomy({ stardustBalance: data.newBalance });
             }
         });
 
         return () => { socket.close(); };
-    }, [stardustBalance]); // dependency added for economy updates
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Rolling animation
     useEffect(() => {
@@ -75,8 +78,8 @@ export const UniversalSlotMachine = () => {
         try {
             const res = await api.post('/teller/slot', { betAmount, betType });
             setMyBet({ amount: betAmount, type: betType });
-            if (res.data && res.data.remainingStardust !== undefined) {
-                updateEconomy({ stardustBalance: res.data.remainingStardust });
+            if (res.data && res.data.newBalance !== undefined) {
+                updateEconomy({ stardustBalance: res.data.newBalance });
             }
             showToast('Bahis alındı! Bol şans 🍀', 'success');
         } catch (err: any) {
@@ -151,14 +154,14 @@ export const UniversalSlotMachine = () => {
                                 disabled={betAmount <= 0} 
                                 className="bg-error/20 text-error border border-error/30 py-3 rounded-xl font-label-md font-bold hover:bg-error/30 transition-colors disabled:opacity-50"
                             >
-                                KÜÇÜK (3-10)
+                                KÜÇÜK (3-13)
                             </button>
                             <button 
                                 onClick={() => placeBet('BIG')} 
                                 disabled={betAmount <= 0} 
                                 className="bg-tertiary/20 text-tertiary border border-tertiary/30 py-3 rounded-xl font-label-md font-bold hover:bg-tertiary/30 transition-colors disabled:opacity-50"
                             >
-                                BÜYÜK (11-18)
+                                BÜYÜK (14-27)
                             </button>
                         </div>
                     </div>

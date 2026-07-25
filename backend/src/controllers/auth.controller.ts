@@ -95,6 +95,7 @@ export const register = async (req: Request, res: Response) => {
                 moonSign: newUser.moonSign,
                 risingSign: newUser.risingSign,
                 stardustBalance: newUser.stardustBalance,
+                diamondBalance: newUser.diamondBalance,
                 role: newUser.role
             }
         });
@@ -151,6 +152,7 @@ export const login = async (req: Request, res: Response) => {
                 moonSign: user.moonSign,
                 risingSign: user.risingSign,
                 stardustBalance: user.stardustBalance,
+                diamondBalance: user.diamondBalance,
                 role: user.role
             }
         });

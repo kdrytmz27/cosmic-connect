@@ -4,12 +4,24 @@ import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
+import { premiumApi } from '../api/premium';
 
 const Market = () => {
-    const { isPremium, stardustBalance } = useAuth();
+    const { isPremium, stardustBalance, updateEconomy } = useAuth();
     const { showToast } = useToast();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+
+    // TEST ONLY - remove this handler and its button once manual QA is done.
+    const handleDevAddStardust = async () => {
+        try {
+            const res = await premiumApi.devAddStardust();
+            updateEconomy({ stardustBalance: res.data.stardustBalance });
+            showToast('+10.000 Yıldız Tozu eklendi (test)', 'success');
+        } catch (e: any) {
+            showToast(e?.response?.data?.error || 'Test bakiyesi eklenemedi', 'error');
+        }
+    };
 
     const [stardustPackages, setStardustPackages] = useState<PurchasesPackage[]>([]);
     const [premiumPackage, setPremiumPackage] = useState<PurchasesPackage | null>(null);
@@ -57,9 +69,19 @@ const Market = () => {
                         Enerjini yenilemek ve falları yanıtlamak için Yıldız Tozu topla.
                     </p>
                 </div>
-                <div className="hidden md:flex items-center gap-2 bg-white/5 border border-secondary/30 px-4 py-2 rounded-full cursor-default">
-                    <span className="material-symbols-outlined text-secondary">auto_awesome</span>
-                    <span className="font-label-md text-label-md text-secondary font-bold">{stardustBalance} Toz</span>
+                <div className="flex items-center gap-2">
+                    <div className="hidden md:flex items-center gap-2 bg-white/5 border border-secondary/30 px-4 py-2 rounded-full cursor-default">
+                        <span className="material-symbols-outlined text-secondary">auto_awesome</span>
+                        <span className="font-label-md text-label-md text-secondary font-bold">{stardustBalance} Toz</span>
+                    </div>
+                    {/* TEST ONLY button - remove once manual QA is done */}
+                    <button
+                        onClick={handleDevAddStardust}
+                        className="flex items-center gap-1 bg-red-500/20 border border-red-500/40 text-red-300 px-3 py-2 rounded-full text-xs font-bold hover:bg-red-500/30 transition-colors"
+                        title="TEST ONLY: +10.000 Yıldız Tozu ekle"
+                    >
+                        🧪 Test +10k
+                    </button>
                 </div>
             </header>
 

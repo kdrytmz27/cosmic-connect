@@ -343,8 +343,8 @@ const TellerDashboard = () => {
                                         placeholder="Gözden kaçan detayları vurgula, geleceğe ışık tut..."
                                         className="w-full bg-surface-container-lowest border border-white/10 rounded-xl p-4 font-body-md text-on-surface focus:outline-none focus:border-primary transition-all min-h-[200px] resize-y placeholder:text-on-surface-variant/40"
                                     />
-                                    <div className={`absolute bottom-4 right-4 font-label-sm text-xs ${interpretation.length < 20 ? 'text-error' : 'text-tertiary'}`}>
-                                        {interpretation.length} / 20 karakter
+                                    <div className={`absolute bottom-4 right-4 font-label-sm text-xs ${interpretation.length < 50 ? 'text-error' : 'text-tertiary'}`}>
+                                        {interpretation.length} / 50 karakter
                                     </div>
                                 </div>
 
@@ -382,7 +382,7 @@ const TellerDashboard = () => {
                                 </button>
                                 <button 
                                     onClick={handleSubmitInterpretation} 
-                                    disabled={submitting || (interpretation.trim().length < 20 && !audioUrl)}
+                                    disabled={submitting || (interpretation.trim().length < 50 && !audioUrl)}
                                     className="flex-[2] bg-primary-container text-on-primary-container font-label-md text-label-md rounded-xl shadow-[0_0_15px_rgba(147,51,234,0.4)] hover:bg-inverse-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                 >
                                     {submitting ? (
