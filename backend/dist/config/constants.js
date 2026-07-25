@@ -14,7 +14,8 @@ exports.CONSTANTS = {
     },
     COSTS: {
         EXTEND_MATCH: 100, // Stardust
-        MAKE_MATCH_PERMANENT: 500 // Stardust
+        MAKE_MATCH_PERMANENT: 500, // Stardust
+        FORTUNE_TELLING_BASE: 300 // Stardust
     },
     REWARDS: {
         DAILY_LOGIN_BASE: 10,

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import {
     getProfile, getDailyMatch, addFriend, getFriends, getMessages, sendMessage,
-    updateProfile, reportUser, updateCosmicStatus, getDailyRewardStatus,
+    updateProfile, updateCosmicStatus, getDailyRewardStatus,
     claimDailyReward, getLeaderboard, passMatch, extendMatch, makeMatchPermanent,
     acceptMatch, deleteFriend, getSynastry,
-    sendFriendRequest, acceptFriendRequest, rejectFriendRequest, getPendingRequests, getFriendRequestStatus
+    sendFriendRequest, acceptFriendRequest, rejectFriendRequest, getPendingRequests, getFriendRequestStatus,
+    getTransactions
 } from '../controllers/user.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 
@@ -49,5 +50,6 @@ router.post('/report/:targetId', authenticate as any, reportUserBlock as any);
 router.get('/daily-reward/status', authenticate as any, getDailyRewardStatus as any);
 router.post('/daily-reward/claim', authenticate as any, claimDailyReward as any);
 router.get('/leaderboard', authenticate as any, getLeaderboard as any);
+router.get('/transactions', authenticate as any, getTransactions as any);
 
 export default router;

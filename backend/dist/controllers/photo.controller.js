@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteGalleryPhoto = exports.uploadGalleryPhoto = exports.uploadAvatar = void 0;
+exports.uploadChatPhoto = exports.deleteGalleryPhoto = exports.uploadGalleryPhoto = exports.uploadAvatar = void 0;
 const index_1 = require("../index");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -100,4 +100,22 @@ const deleteGalleryPhoto = async (req, res) => {
     }
 };
 exports.deleteGalleryPhoto = deleteGalleryPhoto;
+const uploadChatPhoto = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId)
+            return res.status(401).json({ message: 'Unauthorized' });
+        if (!req.file) {
+            return res.status(400).json({ message: 'Lütfen bir resim seçin' });
+        }
+        const photoUrl = `/uploads/${req.file.filename}`;
+        // Chat fotoğrafları Photo (Galeri) tablosuna kaydedilmez, doğrudan mesajla birlikte kullanılmak üzere link döndürülür
+        res.json({ message: 'Sohbet resmi yüklendi', imageUrl: photoUrl });
+    }
+    catch (error) {
+        console.error('Upload Chat Photo Error:', error);
+        res.status(500).json({ message: 'Sunucu hatası' });
+    }
+};
+exports.uploadChatPhoto = uploadChatPhoto;
 //# sourceMappingURL=photo.controller.js.map

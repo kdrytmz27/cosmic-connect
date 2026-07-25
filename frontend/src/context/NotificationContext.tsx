@@ -43,23 +43,45 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             const res = await axios.get(`${BACKEND_URL}/api/notification`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setNotifications(res.data.notifications);
-            setUnreadCount(res.data.notifications.filter((n: Notification) => !n.isRead).length);
+            let fetchedNotifs = res.data.notifications;
+
+            // Günlük Kozmik Uyarı Enjeksiyonu
+            const todayStr = new Date().toISOString().split('T')[0];
+            const alertReadStatus = localStorage.getItem('cosmicAlertRead_' + todayStr) === 'true';
+            
+            const cosmicAlert: Notification = {
+                id: 'cosmic-alert-' + todayStr,
+                type: 'SYSTEM',
+                title: '🪐 Günlük Kozmik Uyarı',
+                content: 'Bugün Ay Boşlukta! Duygusal ve riskli kararlar almak yerine dinlenmeyi seçin. Evren sana "Dur ve nefes al" diyor.',
+                isRead: alertReadStatus,
+                createdAt: new Date().toISOString()
+            };
+            
+            fetchedNotifs = [cosmicAlert, ...fetchedNotifs];
+
+            setNotifications(fetchedNotifs);
+            setUnreadCount(fetchedNotifs.filter((n: Notification) => !n.isRead).length);
         } catch (error) {
             console.error('Bildirimler yüklenemedi:', error);
         }
     };
 
     const markAsRead = async (id: string) => {
+        if (id.startsWith('cosmic-alert')) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            localStorage.setItem('cosmicAlertRead_' + todayStr, 'true');
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+            setUnreadCount(prev => Math.max(0, prev - 1));
+            return;
+        }
+
         try {
             await axios.post(`${BACKEND_URL}/api/notification/${id}/read`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
             setUnreadCount(prev => Math.max(0, prev - 1));
-
-            // Eğer actionUrl varsa navigation işlemi NavBar bileşeninde veya çağrıldığı yerde yapılmalı (navigate)
-            // Bu yüzden burası sadece veritabanını güncelliyor.
         } catch (error) {
             console.error('Bildirim okundu işaretlenemedi:', error);
         }

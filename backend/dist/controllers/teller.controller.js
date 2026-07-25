@@ -5,6 +5,7 @@ const index_1 = require("../index");
 const slot_service_1 = require("../services/slot.service");
 const logger_1 = require("../utils/logger");
 const UserRole_1 = require("../enums/UserRole");
+const constants_1 = require("../config/constants");
 const listTellers = async (req, res) => {
     try {
         const tellers = await index_1.prisma.fortuneTeller.findMany({
@@ -35,10 +36,10 @@ const bookAppointment = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        const APPOINTMENT_COST = 100;
+        const APPOINTMENT_COST = constants_1.CONSTANTS.COSTS.FORTUNE_TELLING_BASE || 300;
         if (user.stardustBalance < APPOINTMENT_COST) {
             logger_1.logger.error('[bookAppointment] Not enough stardust for user', { balance: user.stardustBalance });
-            res.status(400).json({ error: 'Not enough stardust' });
+            res.status(400).json({ error: `Not enough stardust. Gerekli miktar: ${APPOINTMENT_COST}` });
             return;
         }
         const targetTeller = await index_1.prisma.fortuneTeller.findUnique({ where: { id: tellerId } });
@@ -190,7 +191,7 @@ exports.getPendingFortunes = getPendingFortunes;
 const interpretFortune = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { appointmentId, interpretation } = req.body;
+        const { appointmentId, interpretation, audioUrl } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -205,15 +206,15 @@ const interpretFortune = async (req, res) => {
             res.status(404).json({ error: 'Fortune not found or not yours' });
             return;
         }
-        // VULN 53 FIX: Minimum interpretation limit to block fraud (empty/single word interpretations)
-        if (!interpretation || interpretation.trim().length < 50) {
-            res.status(400).json({ error: 'Yorumunuz çok kısa. Lütfen detaylı bir fal yorumu yazınız. (Min. 50 harf)' });
+        // VULN 53 FIX: Minimum interpretation limit to block fraud, bypassed if they sent a voice message (audioUrl)
+        if (!audioUrl && (!interpretation || interpretation.trim().length < 50)) {
+            res.status(400).json({ error: 'Yorumunuz çok kısa. Lütfen detaylı bir fal yorumu yazınız. (Min. 50 harf) veya ses kaydı gönderin.' });
             return;
         }
         // Ensure atomic update, only update if PENDING to prevent infinite money glitch
         const updatedCount = await index_1.prisma.appointment.updateMany({
             where: { id: appointmentId, status: 'PENDING' },
-            data: { status: 'COMPLETED', interpretation }
+            data: { status: 'COMPLETED', interpretation, audioUrl }
         });
         if (updatedCount.count === 0) {
             res.status(400).json({ error: 'Bu fal zaten yorumlanmış!' });

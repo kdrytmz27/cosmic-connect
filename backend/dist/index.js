@@ -19,6 +19,7 @@ const teller_routes_1 = __importDefault(require("./routes/teller.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
 const premium_routes_1 = __importDefault(require("./routes/premium.routes"));
 const photo_routes_1 = __importDefault(require("./routes/photo.routes"));
+const audio_routes_1 = __importDefault(require("./routes/audio.routes"));
 const group_routes_1 = __importDefault(require("./routes/group.routes"));
 const gift_routes_1 = __importDefault(require("./routes/gift.routes"));
 const tarot_routes_1 = __importDefault(require("./routes/tarot.routes"));
@@ -84,7 +85,7 @@ if (process.env.NODE_ENV !== 'test') {
 }
 const limiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // limit each IP to 1000 requests per windowMs
+    max: 500, // limit each IP to 500 requests per windowMs
     message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
@@ -100,6 +101,7 @@ app.use('/api/teller', teller_routes_1.default);
 app.use('/api/user', user_routes_1.default);
 app.use('/api/premium', premium_routes_1.default);
 app.use('/api/photo', photo_routes_1.default);
+app.use('/api/audio', audio_routes_1.default);
 app.use('/api/group', group_routes_1.default);
 app.use('/api/gift', gift_routes_1.default);
 app.use('/api/tarot', tarot_routes_1.default);

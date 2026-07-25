@@ -2,13 +2,13 @@ export declare class UserService {
     static getProfile(currentUserId: string | undefined, targetUserId: string): Promise<{
         profile: {
             role: string;
+            name: string | null;
             email: string;
             birthDate: Date;
             birthTime: string;
             latitude: number;
             longitude: number;
             id: string;
-            name: string | null;
             bio: string | null;
             avatar: string | null;
             hobby: string | null;
@@ -31,9 +31,9 @@ export declare class UserService {
             createdAt: Date;
             photos: {
                 userId: string;
+                url: string;
                 id: string;
                 createdAt: Date;
-                url: string;
             }[];
             fortuneTellerProfile: ({
                 appointments: {
@@ -47,6 +47,8 @@ export declare class UserService {
                 rating: number;
                 reviewCount: number;
                 fortuneTypes: string;
+                iban: string | null;
+                withdrawableBalance: number;
             }) | null;
         };
         compatibility: {
@@ -63,13 +65,13 @@ export declare class UserService {
     } | {
         profile: {
             role: string;
+            name: string | null;
             email: string;
             birthDate: Date;
             birthTime: string;
             latitude: number;
             longitude: number;
             id: string;
-            name: string | null;
             bio: string | null;
             avatar: string | null;
             hobby: string | null;
@@ -92,9 +94,9 @@ export declare class UserService {
             createdAt: Date;
             photos: {
                 userId: string;
+                url: string;
                 id: string;
                 createdAt: Date;
-                url: string;
             }[];
             fortuneTellerProfile: ({
                 appointments: {
@@ -108,6 +110,8 @@ export declare class UserService {
                 rating: number;
                 reviewCount: number;
                 fortuneTypes: string;
+                iban: string | null;
+                withdrawableBalance: number;
             }) | null;
         };
         dailyHoroscope: {
@@ -132,13 +136,13 @@ export declare class UserService {
         matches: {
             match: {
                 isBlurred: boolean;
+                name: string | null;
                 email: string;
                 birthDate: Date;
                 birthTime: string;
                 latitude: number;
                 longitude: number;
                 id: string;
-                name: string | null;
                 bio: string | null;
                 avatar: string | null;
                 hobby: string | null;
@@ -176,6 +180,7 @@ export declare class UserService {
     static updateProfile(userId: string, updateData: any): Promise<{
         profile: {
             role: string;
+            name: string | null;
             email: string;
             birthDate: Date;
             birthTime: string;
@@ -183,7 +188,6 @@ export declare class UserService {
             longitude: number;
             id: string;
             passwordHash: string;
-            name: string | null;
             bio: string | null;
             avatar: string | null;
             hobby: string | null;
@@ -197,6 +201,7 @@ export declare class UserService {
             sunSign: string;
             moonSign: string;
             risingSign: string;
+            planetPositions: import("@prisma/client/runtime/library").JsonValue | null;
             stardustBalance: number;
             matchScore: number;
             cosmicStatus: string | null;
@@ -215,8 +220,10 @@ export declare class UserService {
             xp: number;
             level: number;
             lastDailyTarot: Date | null;
-            badges: string;
+            badges: import("@prisma/client/runtime/library").JsonValue;
             pushToken: string | null;
+            resetToken: string | null;
+            resetTokenExpires: Date | null;
             dailyQuestMatches: number;
             dailyQuestMessages: number;
             dailyQuestClaimed: boolean;
@@ -242,8 +249,8 @@ export declare class UserService {
     }>;
     static getLeaderboard(): Promise<{
         leaderboard: {
-            id: string;
             name: string | null;
+            id: string;
             avatar: string | null;
             xp: number;
             level: number;

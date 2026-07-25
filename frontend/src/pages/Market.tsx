@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../api/client';
-import { Sparkles, Crown, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
+import { useNavigate } from 'react-router-dom';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 const Market = () => {
-    const { isPremium, stardustBalance, updateEconomy } = useAuth();
+    const { isPremium, stardustBalance } = useAuth();
     const { showToast } = useToast();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
 
     const [stardustPackages, setStardustPackages] = useState<PurchasesPackage[]>([]);
@@ -24,7 +24,7 @@ const Market = () => {
                     setStardustPackages(packages.filter(p => !p.identifier.toLowerCase().includes('premium')));
                 }
             } catch (e) {
-                console.error("Error loading revenuecat offerings (Belki de Emülatördesiniz?):", e);
+                console.error("Error loading revenuecat offerings:", e);
             }
         };
         loadOfferings();
@@ -44,143 +44,113 @@ const Market = () => {
         }
     };
 
-    const claimDailyReward = async () => {
-        setLoading(true);
-        try {
-            const res = await api.post('/user/daily-reward/claim');
-            updateEconomy({ stardustBalance: res.data.newBalance });
-            showToast(`Günlük ödül alındı! +${res.data.rewardAmount} Yıldız Tozu 🌟 (${res.data.streak}. Gün)`, 'success');
-        } catch (e) {
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const buyStardustDev = async (amount: number) => {
-        setLoading(true);
-        try {
-            const res = await api.post('/premium/buy-stardust', { amount });
-            updateEconomy({ stardustBalance: res.data.balance });
-            showToast(`${amount} Yıldız Tozu başarıyla eklendi!`, 'success');
-        } catch (e) { } finally {
-            setLoading(false);
-        }
-    };
-
-    const subscribePremiumDev = async () => {
-        setLoading(true);
-        try {
-            await api.post('/premium/buy-premium');
-            updateEconomy({ isPremium: true });
-            showToast('Premium aboneliğiniz başlatıldı! Teşekkürler.', 'success');
-        } catch (e) {
-            showToast('Premium alınamadı.', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     return (
-        <div style={{ padding: 16, paddingBottom: 100, minHeight: '100vh' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: 20 }}>
-                    <Sparkles size={16} color="var(--accent-gold)" />
-                    <span style={{ fontWeight: 'bold' }}>{stardustBalance}</span>
+        <div className="flex-1 pt-8 px-container-margin max-w-7xl mx-auto w-full pb-24 flex flex-col gap-section-gap">
+            {/* Header */}
+            <header className="flex justify-between items-end">
+                <div>
+                    <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface flex items-center gap-3">
+                        <span className="material-symbols-outlined text-4xl text-secondary">shopping_bag</span>
+                        Market
+                    </h1>
+                    <p className="font-body-md text-body-md text-on-surface-variant mt-2">
+                        Enerjini yenilemek ve falları yanıtlamak için Yıldız Tozu topla.
+                    </p>
+                </div>
+                <div className="hidden md:flex items-center gap-2 bg-white/5 border border-secondary/30 px-4 py-2 rounded-full cursor-default">
+                    <span className="material-symbols-outlined text-secondary">auto_awesome</span>
+                    <span className="font-label-md text-label-md text-secondary font-bold">{stardustBalance} Toz</span>
+                </div>
+            </header>
+
+            {/* Main Content Area (Market + Slot Machine) */}
+            <div className="flex flex-col lg:flex-row gap-section-gap">
+                
+                {/* Market Packages */}
+                <div className="flex-1 flex flex-col gap-6">
+                    {/* Premium Card */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`rounded-3xl p-[1px] relative overflow-hidden ${isPremium ? 'opacity-80' : ''}`}
+                        style={{ background: 'linear-gradient(135deg, #9333ea, #ffc640)' }}
+                    >
+                        {!isPremium && <div className="absolute inset-0 bg-primary/20 animate-pulse"></div>}
+                        <div className="w-full bg-surface-container-lowest rounded-[23px] p-8 relative z-10 backdrop-blur-3xl">
+                            {!isPremium && <div className="absolute top-0 right-0 bg-secondary text-on-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg rounded-tr-[22px]">EN POPÜLER</div>}
+                            
+                            <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+                                {/* Visual */}
+                                <div className="w-28 h-28 relative flex items-center justify-center shrink-0">
+                                    <div className="absolute inset-0 bg-secondary/20 blur-2xl rounded-full"></div>
+                                    <span className="material-symbols-outlined text-6xl text-secondary relative z-10 drop-shadow-[0_0_20px_rgba(255,198,64,0.6)]">workspace_premium</span>
+                                </div>
+                                
+                                {/* Info */}
+                                <div className="flex-1 text-center md:text-left">
+                                    <h2 className="font-headline-lg text-headline-lg text-on-surface mb-2">Cosmic Premium</h2>
+                                    <ul className="space-y-2 mb-6">
+                                        <li className="flex items-center gap-2 text-on-surface-variant font-body-md">
+                                            <span className="material-symbols-outlined text-secondary text-sm">check_circle</span> Sınırsız Mesajlaşma
+                                        </li>
+                                        <li className="flex items-center gap-2 text-on-surface-variant font-body-md">
+                                            <span className="material-symbols-outlined text-secondary text-sm">check_circle</span> Özel Fallarda Öncelik
+                                        </li>
+                                        <li className="flex items-center gap-2 text-on-surface-variant font-body-md">
+                                            <span className="material-symbols-outlined text-secondary text-sm">check_circle</span> Premium Profil Rozeti
+                                        </li>
+                                    </ul>
+                                    
+                                    {isPremium ? (
+                                        <div className="inline-block px-6 py-2 bg-secondary/20 text-secondary border border-secondary/50 rounded-full font-label-md font-bold">
+                                            Premium Aktif ✨
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            disabled={loading}
+                                            onClick={() => premiumPackage ? purchaseRevenueCatPackage(premiumPackage) : navigate('/vip')}
+                                            className="w-full md:w-auto px-8 py-3 rounded-full bg-gradient-to-r from-primary-container to-inverse-primary text-on-primary-container font-label-md text-label-md font-bold hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            {premiumPackage ? `Premium Al — ${premiumPackage.product.priceString}` : 'Ayrıcalıkları İncele ✨'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    {/* Stardust Packages */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {stardustPackages.length > 0 ? stardustPackages.map((pack, idx) => (
+                            <motion.div 
+                                key={idx}
+                                whileHover={{ y: -5 }}
+                                className="bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10 text-center flex flex-col items-center group cursor-pointer hover:bg-white/10 transition-colors"
+                            >
+                                <div className="w-16 h-16 mb-4 relative flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full group-hover:bg-primary/40 transition-all"></div>
+                                    <span className="material-symbols-outlined text-4xl text-primary relative z-10 drop-shadow-[0_0_10px_rgba(147,51,234,0.5)]">auto_awesome</span>
+                                </div>
+                                <h3 className="font-label-md text-label-md text-on-surface mb-1">{pack.product.title.split(' ')[0]}</h3>
+                                <p className="font-label-sm text-label-sm text-on-surface-variant mb-4">Yıldız Tozu</p>
+                                <button 
+                                    disabled={loading}
+                                    onClick={() => purchaseRevenueCatPackage(pack)}
+                                    className="w-full py-2 px-4 rounded-full border border-white/20 text-on-surface font-label-sm hover:bg-white/5 transition-colors mt-auto"
+                                >
+                                    {pack.product.priceString}
+                                </button>
+                            </motion.div>
+                        )) : (
+                            <div className="col-span-2 text-center text-on-surface-variant py-8 bg-white/5 rounded-2xl border border-white/10">
+                                <span className="material-symbols-outlined text-4xl mb-2 opacity-50">shopping_cart</span>
+                                <p>Gerçek paketler yükleniyor veya servisler kapalı...</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-
-            <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={claimDailyReward}
-                className="glass-panel"
-                style={{ padding: 20, marginBottom: 24, background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.15))', border: '1px solid rgba(56, 189, 248, 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ padding: 12, background: 'rgba(56,189,248,0.2)', borderRadius: 12 }}>
-                        <Sparkles size={24} color="#38bdf8" />
-                    </div>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: 18, color: 'white' }}>Günlük Ödül</h3>
-                        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Her gün gir, yıldız tozlarını topla!</p>
-                    </div>
-                </div>
-                <button disabled={loading} style={{ background: '#38bdf8', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 20, fontWeight: 'bold', cursor: 'pointer' }}>
-                    Topla
-                </button>
-            </motion.div>
-
-            <motion.div
-                animate={isPremium ? {} : {
-                    boxShadow: ['0 0 15px rgba(255,215,0,0)', '0 0 15px rgba(255,215,0,0.3)', '0 0 15px rgba(255,215,0,0)']
-                }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                className="glass-panel shine-card"
-                style={{ padding: 24, marginBottom: 24, overflow: 'hidden', position: 'relative', border: isPremium ? '2px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.1)', background: isPremium ? 'linear-gradient(135deg, rgba(255,215,0,0.1), rgba(0,0,0,0))' : undefined }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <Crown size={32} color={isPremium ? "var(--accent-gold)" : "white"} />
-                    <h2 style={{ fontSize: 22, margin: 0, color: isPremium ? 'var(--accent-gold)' : 'white' }}>Cosmic Premium</h2>
-                </div>
-
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Sınırsız günlük eşleşme (Kaydırma)</li>
-                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Günde 5 bedava Süper Beğeni</li>
-                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> Günde 10 defa bedava Ek Süre (Maçlarda)</li>
-                    <li style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={18} color="var(--accent-gold)" /> 320 saniyelik uzun eşleşme süresi</li>
-                </ul>
-
-                {isPremium ? (
-                    <div style={{ padding: 12, background: 'rgba(255,215,0,0.2)', borderRadius: 12, textAlign: 'center', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
-                        Premium Aktif ✨
-                    </div>
-                ) : (
-                    <button
-                        disabled={loading}
-                        onClick={() => premiumPackage ? purchaseRevenueCatPackage(premiumPackage) : subscribePremiumDev()}
-                        className="btn-primary"
-                        style={{ width: '100%', background: 'linear-gradient(45deg, var(--accent-gold), #ff8c00)', color: 'white' }}>
-                        {premiumPackage ? `${premiumPackage.product.priceString} / ${premiumPackage.product.title}` : 'Premium\'a Geç (Dev Test)'}
-                    </button>
-                )}
-            </motion.div>
-
-            <h2 style={{ fontSize: 20, marginBottom: 16 }}>Market (Gerçek Ürünler)</h2>
-            {stardustPackages.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)' }}>Mağaza yükleniyor veya Google Servisleri kapalı...</p>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    {stardustPackages.map((pack, idx) => (
-                        <motion.div key={idx}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="glass-panel shine-card"
-                            style={{ padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, border: '1px solid rgba(255,255,255,0.08)' }}
-                        >
-                            <Sparkles size={24} color="var(--accent-gold)" />
-                            <div style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>{pack.product.title.split(' ')[0]}</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Yıldız Tozu</div>
-                            <button
-                                disabled={loading}
-                                onClick={() => purchaseRevenueCatPackage(pack)}
-                                style={{ marginTop: 8, background: 'rgba(255,255,255,0.1)', border: 'none', padding: '8px 16px', borderRadius: 20, color: 'white', fontWeight: 'bold', width: '100%', cursor: 'pointer' }}>
-                                {pack.product.priceString}
-                            </button>
-                        </motion.div>
-                    ))}
-                </div>
-            )}
-
-            <div style={{ marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20 }}>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>[Geliştirici Test] RevenueCat çalışmazsa:</p>
-                <button
-                    disabled={loading}
-                    onClick={() => buyStardustDev(10000)}
-                    style={{ background: 'transparent', border: '1px dashed var(--accent-gold)', color: 'var(--accent-gold)', padding: 12, borderRadius: 12, width: '100%', marginTop: 8, cursor: 'pointer' }}>
-                    +10.000 Yıldız Tozu Ekle (Dev)
-                </button>
-            </div>
-        </div >
+        </div>
     );
 };
 

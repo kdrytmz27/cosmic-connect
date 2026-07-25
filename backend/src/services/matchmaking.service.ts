@@ -41,18 +41,8 @@ export interface QueuedPlayer {
     sunSign: string | null;
 }
 
-const queue: QueuedPlayer[] = [];
-const rooms = new Map<string, any>();
-
 export const matchmakingService = {
     async joinQueue(player: QueuedPlayer) {
-        // Remove existing entry for this user (prevent duplicates)
-        const existingIdx = queue.findIndex(p => p.userId === player.userId);
-        if (existingIdx !== -1) {
-            queue.splice(existingIdx, 1);
-        }
-
-        // Additional safety check: Ensure user is not a teller
         const { prisma } = await import('../index');
         const user = await prisma.user.findUnique({ where: { id: player.userId } });
         if (user?.role === UserRole.FORTUNE_TELLER) {
@@ -60,24 +50,59 @@ export const matchmakingService = {
             return;
         }
 
-        queue.push(player);
-        logger.debug(`[Matchmaking] User ${player.userId} joined queue. Queue size: ${queue.length}`);
+        await prisma.matchQueue.upsert({
+            where: { userId: player.userId },
+            create: {
+                userId: player.userId,
+                socketId: player.socketId,
+                matchScore: player.matchScore,
+                isPremium: player.isPremium,
+                karma: player.karma,
+                sunSign: player.sunSign
+            },
+            update: {
+                socketId: player.socketId,
+                matchScore: player.matchScore,
+                isPremium: player.isPremium,
+                karma: player.karma,
+                sunSign: player.sunSign,
+                joinedAt: new Date()
+            }
+        });
+        logger.debug(`[Matchmaking] User ${player.userId} joined queue in DB.`);
     },
 
-    removeFromQueue(userId: string) {
-        const idx = queue.findIndex(p => p.userId === userId);
-        if (idx !== -1) {
-            queue.splice(idx, 1);
-            logger.debug(`[Matchmaking] User ${userId} removed from queue. Queue size: ${queue.length}`);
+    async removeFromQueue(userId: string) {
+        const { prisma } = await import('../index');
+        try {
+            await prisma.matchQueue.delete({ where: { userId } });
+            logger.debug(`[Matchmaking] User ${userId} removed from queue in DB.`);
+        } catch (e) {
+            // Already removed or not in queue
         }
     },
 
     async tryMatch(): Promise<[QueuedPlayer, QueuedPlayer][]> {
-        logger.debug(`[Matchmaking] tryMatch called. Queue size: ${queue.length}`, { queue: queue.map(p => ({ userId: p.userId, score: p.matchScore })) });
+        const { prisma } = await import('../index');
+        const queue = await prisma.matchQueue.findMany({ orderBy: { joinedAt: 'asc' } });
+        logger.debug(`[Matchmaking] tryMatch called. Queue DB size: ${queue.length}`);
+        
         const matchedPairs: [QueuedPlayer, QueuedPlayer][] = [];
 
         if (queue.length >= 2) {
-            const { prisma } = await import('../index');
+            const queueIds = queue.map(q => q.userId);
+            const allFriendships = await prisma.friendship.findMany({
+                where: {
+                    user1Id: { in: queueIds },
+                    user2Id: { in: queueIds }
+                }
+            });
+            const friendSet = new Set<string>();
+            allFriendships.forEach(f => {
+                friendSet.add(`${f.user1Id}_${f.user2Id}`);
+                friendSet.add(`${f.user2Id}_${f.user1Id}`);
+            });
+
             let i = 0;
             while (i < queue.length) {
                 let matched = false;
@@ -98,25 +123,26 @@ export const matchmakingService = {
                     const effectiveThreshold = 20 + compatBonus + karmaBonus;
 
                     if (scoreDiff <= effectiveThreshold) {
-                        const existingRelation = await prisma.friendship.findFirst({
-                            where: {
-                                OR: [
-                                    { user1Id: p1.userId, user2Id: p2.userId },
-                                    { user1Id: p2.userId, user2Id: p1.userId }
-                                ]
-                            }
-                        });
-
-                        if (existingRelation) {
+                        if (friendSet.has(`${p1.userId}_${p2.userId}`)) {
                             continue;
                         }
 
-                        matchedPairs.push([p1, p2]);
-                        queue.splice(j, 1);
-                        queue.splice(i, 1);
-                        matched = true;
-                        logger.info(`[Matchmaking] MATCH FOUND! ${p1.userId} <-> ${p2.userId} (compat bonus: ${compatBonus})`);
-                        break;
+                        // Try to lock/remove them atomically to prevent multi-instance race conditions
+                        try {
+                            await prisma.$transaction([
+                                prisma.matchQueue.delete({ where: { userId: p1.userId } }),
+                                prisma.matchQueue.delete({ where: { userId: p2.userId } })
+                            ]);
+                            
+                            matchedPairs.push([p1, p2]);
+                            queue.splice(j, 1);
+                            queue.splice(i, 1);
+                            matched = true;
+                            logger.info(`[Matchmaking] MATCH FOUND! ${p1.userId} <-> ${p2.userId} (compat bonus: ${compatBonus})`);
+                            break;
+                        } catch (e) {
+                            logger.debug(`[Matchmaking] DB Collision: Another instance likely matched ${p1.userId} or ${p2.userId}`);
+                        }
                     }
                 }
                 if (!matched) {
@@ -128,26 +154,26 @@ export const matchmakingService = {
     },
 
     async createRoom(p1: QueuedPlayer, p2: QueuedPlayer, timeoutCallback: (roomId: string) => void): Promise<{ roomId: string, duration: number }> {
+        const { prisma } = await import('../index');
         const roomId = `room_${Date.now()}_${p1.userId}_${p2.userId}`;
 
         const isPremiumMatch = p1.isPremium || p2.isPremium;
         const duration = isPremiumMatch ? 320000 : 160000;
         const expiresAt = Date.now() + duration;
-        const timeoutId = setTimeout(() => timeoutCallback(roomId), duration);
 
-        rooms.set(`room:${roomId}`, {
-            p1: p1.userId,
-            p2: p2.userId,
-            createdAt: Date.now(),
-            expiresAt,
-            timeoutId,
-            extraTimeRequests: new Set<string>(),
-            extensionsCount: 0,
-            timeoutCallback
+        await prisma.matchRoom.create({
+            data: {
+                id: roomId,
+                p1Id: p1.userId,
+                p2Id: p2.userId,
+                expiresAt: new Date(expiresAt),
+                extensionsCount: 0
+            }
         });
 
-        // VULN 35 FIX COMPATIBILITY: We must insert a temporary SWIPE_MATCH record so that
-        // the "Force Match Protection" in friendship.service.ts acceptMatch doesn't block legitimate matchmaking socket matches!
+        // Set local timeout. If the room is extended on another server, the timeout callback will check the DB before deleting.
+        setTimeout(() => timeoutCallback(roomId), duration);
+
         try {
             await prisma.friendship.create({
                 data: {
@@ -156,46 +182,55 @@ export const matchmakingService = {
                     status: 'SWIPE_MATCH' as any
                 }
             });
-        } catch (e) {
-            // Might already exist due to quick re-queue, ignore
-        }
+        } catch (e) {}
 
         return { roomId, duration };
     },
 
-    getRoom(roomId: string) {
-        return rooms.get(`room:${roomId}`);
+    async getRoom(roomId: string) {
+        const { prisma } = await import('../index');
+        return prisma.matchRoom.findUnique({ where: { id: roomId } });
     },
 
-    extendRoomTime(roomId: string, extraMs: number) {
-        const room = rooms.get(`room:${roomId}`);
+    async extendRoomTime(roomId: string, extraMs: number) {
+        const { prisma } = await import('../index');
+        const room = await prisma.matchRoom.findUnique({ where: { id: roomId } });
         if (!room) return false;
 
-        room.extensionsCount = (room.extensionsCount || 0) + 1;
-
         const now = Date.now();
-        const currentRemaining = Math.max(0, room.expiresAt - now);
+        const currentRemaining = Math.max(0, room.expiresAt.getTime() - now);
         const newRemaining = currentRemaining + extraMs;
-        room.expiresAt = now + newRemaining;
 
-        clearTimeout(room.timeoutId);
-        room.timeoutId = setTimeout(() => room.timeoutCallback(roomId), newRemaining);
-        room.extraTimeRequests.clear();
+        await prisma.matchRoom.update({
+            where: { id: roomId },
+            data: { 
+                expiresAt: new Date(now + newRemaining),
+                extensionsCount: room.extensionsCount + 1
+            }
+        });
+
         return true;
     },
 
     async removeRoom(roomId: string) {
-        const room = rooms.get(`room:${roomId}`);
-        if (room && room.timeoutId) clearTimeout(room.timeoutId);
-        rooms.delete(`room:${roomId}`);
+        const { prisma } = await import('../index');
+        const room = await prisma.matchRoom.findUnique({ where: { id: roomId } });
+        if (!room) return;
+
+        // Check if room was extended (perhaps by another server instance)
+        if (room.expiresAt.getTime() > Date.now()) {
+            const remaining = room.expiresAt.getTime() - Date.now();
+            setTimeout(() => matchmakingService.removeRoom(roomId), remaining);
+            return;
+        }
 
         try {
+            await prisma.matchRoom.delete({ where: { id: roomId } });
+            
             const { getSocketIo } = await import('../controllers/socket.controller');
             const io = getSocketIo();
             if (io) {
-                // Force user client to close chat UI
                 io.to(roomId).emit('chatEnded', { message: 'Süre doldu, kozmik bağlantı koptu.' });
-                // EVICT ALL: Prevent eavesdropping/hacked messages
                 io.socketsLeave(roomId);
             }
         } catch (e) {

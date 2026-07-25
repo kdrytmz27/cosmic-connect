@@ -161,6 +161,7 @@ exports.matchmakingService = {
             expiresAt,
             timeoutId,
             extraTimeRequests: new Set(),
+            extensionsCount: 0,
             timeoutCallback
         });
         // VULN 35 FIX COMPATIBILITY: We must insert a temporary SWIPE_MATCH record so that
@@ -186,6 +187,7 @@ exports.matchmakingService = {
         const room = rooms.get(`room:${roomId}`);
         if (!room)
             return false;
+        room.extensionsCount = (room.extensionsCount || 0) + 1;
         const now = Date.now();
         const currentRemaining = Math.max(0, room.expiresAt - now);
         const newRemaining = currentRemaining + extraMs;

@@ -42,6 +42,7 @@ export declare const ADMIN_USER: {
 };
 export declare function createTestUser(data: typeof TEST_USER, role?: string, stardust?: number): Promise<{
     role: string;
+    name: string | null;
     email: string;
     birthDate: Date;
     birthTime: string;
@@ -49,7 +50,6 @@ export declare function createTestUser(data: typeof TEST_USER, role?: string, st
     longitude: number;
     id: string;
     passwordHash: string;
-    name: string | null;
     bio: string | null;
     avatar: string | null;
     hobby: string | null;
@@ -63,6 +63,7 @@ export declare function createTestUser(data: typeof TEST_USER, role?: string, st
     sunSign: string;
     moonSign: string;
     risingSign: string;
+    planetPositions: import("@prisma/client/runtime/library").JsonValue | null;
     stardustBalance: number;
     matchScore: number;
     cosmicStatus: string | null;
@@ -81,8 +82,10 @@ export declare function createTestUser(data: typeof TEST_USER, role?: string, st
     xp: number;
     level: number;
     lastDailyTarot: Date | null;
-    badges: string;
+    badges: import("@prisma/client/runtime/library").JsonValue;
     pushToken: string | null;
+    resetToken: string | null;
+    resetTokenExpires: Date | null;
     dailyQuestMatches: number;
     dailyQuestMessages: number;
     dailyQuestClaimed: boolean;

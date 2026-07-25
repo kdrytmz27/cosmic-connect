@@ -51,15 +51,16 @@ export const NatalChart: React.FC<NatalChartProps> = ({ sunSign, moonSign, risin
     };
 
     return (
-        <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
-            {/* Background Glow */}
-            <div style={{
-                position: 'absolute', top: '10%', left: '10%', right: '10%', bottom: '10%',
-                background: 'radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
-                filter: 'blur(20px)', zIndex: 0
-            }} />
+        <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0 auto' }}>
+            <div style={{ position: 'relative', width: size, height: size }}>
+                {/* Background Glow */}
+                <div style={{
+                    position: 'absolute', top: '10%', left: '10%', right: '10%', bottom: '10%',
+                    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
+                    filter: 'blur(20px)', zIndex: 0
+                }} />
 
-            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ zIndex: 1, position: 'relative' }}>
+                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ zIndex: 1, position: 'relative' }}>
                 <defs>
                     <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
                         <stop offset="0%" stopColor="var(--accent-purple)" stopOpacity="0.3" />
@@ -169,8 +170,9 @@ export const NatalChart: React.FC<NatalChartProps> = ({ sunSign, moonSign, risin
                 {/* Center Star */}
                 <circle cx={center} cy={center} r="4" fill="var(--accent-gold)" />
             </svg>
+            </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 16, marginBottom: 8 }}>
                 {PLANETS.map((p) => {
                     if (userPlacements[p.type as keyof typeof userPlacements] === -1) return null;
                     return (

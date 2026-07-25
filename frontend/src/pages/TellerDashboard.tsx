@@ -3,9 +3,9 @@ import api, { BACKEND_URL } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, MessageCircle, Sparkles, Clock, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import VoiceRecorder from '../components/common/VoiceRecorder';
+import { BrandLoader } from '../components/BrandLoader';
 
 interface FortuneRequest {
     id: string;
@@ -30,10 +30,23 @@ interface TellerStats {
     earnedStardust: number;
 }
 
+const FORTUNE_TYPE_LABELS: Record<string, { label: string; icon: string; color: string; bg: string }> = {
+    'TAROT': { label: 'Tarot', icon: 'style', color: 'text-primary', bg: 'bg-primary/10' },
+    'KAHVE': { label: 'Kahve Falı', icon: 'coffee', color: 'text-secondary', bg: 'bg-secondary/10' },
+    'ASTROLOJİ': { label: 'Astroloji', icon: 'auto_awesome', color: 'text-tertiary', bg: 'bg-tertiary/10' },
+    'RÜYA': { label: 'Rüya Yorumu', icon: 'nights_stay', color: 'text-error', bg: 'bg-error/10' }
+};
+
+const getFortuneTypeDisplay = (type: string | null) => {
+    if (!type) return { label: 'Bilinmeyen', icon: 'help', color: 'text-on-surface-variant', bg: 'bg-surface-variant' };
+    return FORTUNE_TYPE_LABELS[type] || { label: type, icon: 'auto_awesome', color: 'text-primary', bg: 'bg-primary/10' };
+};
+
 const TellerDashboard = () => {
     const { user } = useAuth();
     const { showToast } = useToast();
     const navigate = useNavigate();
+    
     const [fortunes, setFortunes] = useState<FortuneRequest[]>([]);
     const [stats, setStats] = useState<TellerStats>({ totalReadings: 0, rating: 0, earnedStardust: 0 });
     const [loading, setLoading] = useState(true);
@@ -50,14 +63,13 @@ const TellerDashboard = () => {
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
-            const fortunesRes = await api.get('/teller/fortunes/pending');
+            const [fortunesRes, profileRes] = await Promise.all([
+                api.get('/teller/fortunes/pending'),
+                api.get('/user/profile/me')
+            ]);
+            
             setFortunes(fortunesRes.data);
-        } catch (err) {
-            console.error('Error fetching fortunes:', err);
-        }
-
-        try {
-            const profileRes = await api.get('/user/profile/me');
+            
             const tellerProfile = profileRes.data.profile?.fortuneTellerProfile;
             if (tellerProfile) {
                 setStats({
@@ -67,7 +79,7 @@ const TellerDashboard = () => {
                 });
             }
         } catch (err) {
-            console.error('Error fetching teller profile stats:', err);
+            console.error('Error fetching dashboard data:', err);
         } finally {
             setLoading(false);
         }
@@ -117,218 +129,274 @@ const TellerDashboard = () => {
     };
 
     if (user?.role !== 'FORTUNE_TELLER') {
-        return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)' }}>Bu sayfaya sadece falcılar erişebilir.</div>;
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-[50vh]">
+                <span className="material-symbols-outlined text-6xl text-error mb-4">lock</span>
+                <h2 className="font-headline-md text-headline-md text-on-surface mb-2">Erişim Reddedildi</h2>
+                <p className="font-body-md text-body-md text-on-surface-variant max-w-md">
+                    Bu sayfaya sadece onaylı kozmik rehberler (Falcılar) erişebilir. Lütfen önce yeteneklerinizi evrenle paylaşarak başvuru yapın.
+                </p>
+                <button onClick={() => navigate('/fortune')} className="mt-6 px-6 py-2 bg-primary-container text-on-primary-container rounded-full hover:bg-inverse-primary transition-colors">
+                    Falcılara Katıl
+                </button>
+            </div>
+        );
     }
 
+    if (loading) return <BrandLoader message="Kozmik Panel Yükleniyor..." />;
+
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ padding: 24, paddingBottom: 100, maxWidth: 600, margin: '0 auto', width: '100%' }}
-        >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-                <h1 className="glow-text" style={{ fontSize: 32, margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Sparkles color="var(--accent-gold)" /> Kozmik Panelim
+        <div className="flex-1 pt-8 px-container-margin max-w-5xl mx-auto w-full pb-24">
+            {/* Header Section */}
+            <header className="mb-section-gap">
+                <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary flex items-center gap-3">
+                    <span className="material-symbols-outlined text-4xl">dashboard</span>
+                    Panel
                 </h1>
-            </div>
+                <p className="font-body-md text-body-md text-on-surface-variant mt-2">
+                    Hoş geldin rehber. Yıldızlar bugün senin için ne söylüyor?
+                </p>
+            </header>
 
-            {/* Stats Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 32 }}>
-                <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.1 }} className="glass-panel" style={{ padding: '16px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <Sparkles color="var(--accent-gold)" size={20} style={{ marginBottom: 8 }} />
-                    <div style={{ fontSize: 24, fontWeight: 'bold', color: 'white' }}>{stats.totalReadings}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Toplam Fal</div>
-                </motion.div>
-                <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.2 }} className="glass-panel" style={{ padding: '16px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <Star color="#facc15" size={20} style={{ marginBottom: 8 }} />
-                    <div style={{ fontSize: 24, fontWeight: 'bold', color: 'white' }}>{stats.rating.toFixed(1)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Ortalama Puan</div>
-                </motion.div>
-                <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.3 }} className="glass-panel" style={{ padding: '16px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ fontSize: 20, marginBottom: 8, filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.8))' }}>⭐</div>
-                    <div style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--accent-purple)' }}>{stats.earnedStardust}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Kazanılan Toz</div>
-                </motion.div>
-            </div>
-
-            <h2 style={{ fontSize: 20, color: 'white', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Clock size={20} color="var(--accent-pink)" /> Bekleyen İstekler
-            </h2>
-
-            {loading ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 32 }}>Yıldızlar okunuyor...</div>
-            ) : fortunes.length === 0 ? (
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-panel" style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    <Sparkles size={40} style={{ margin: '0 auto 16px', color: 'rgba(255,255,255,0.2)' }} />
-                    Şu an bekleyen fal isteği yok.<br />Yeni enerjiler yolda!
-                </motion.div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {fortunes.map((fortune, idx) => (
-                        <motion.div
-                            initial={{ x: -20, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            transition={{ delay: idx * 0.1 }}
-                            key={fortune.id}
-                            className="glass-panel"
-                            style={{ padding: 20, position: 'relative', overflow: 'hidden' }}
-                        >
-                            <div style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(139, 92, 246, 0.2)', padding: '6px 12px', borderBottomLeftRadius: 16, color: 'var(--accent-purple)', fontWeight: 'bold', fontSize: 13 }}>
-                                +{fortune.stardustPrice} ⭐
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                                <img loading="lazy" src={fortune.user.avatar ? `${BACKEND_URL}${fortune.user.avatar}` : `https://ui-avatars.com/api/?name=${fortune.user.name}&background=random`} alt="Avatar" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(139, 92, 246, 0.4)' }} />
-                                <div>
-                                    <div style={{ fontSize: 16, fontWeight: 'bold', color: 'white' }}>{fortune.user.name || 'Gizemli Yabancı'}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', gap: 8 }}>
-                                        <span style={{ padding: '2px 8px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: 12 }}>☀️ {fortune.user.sunSign}</span>
-                                        <span style={{ padding: '2px 8px', background: 'rgba(139, 92, 246, 0.1)', color: '#a855f7', borderRadius: 12 }}>🌙 {fortune.user.moonSign}</span>
-                                        <span style={{ padding: '2px 8px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', borderRadius: 12 }}>⬆️ {fortune.user.risingSign}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 16, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                {fortune.fortuneType && (
-                                    <div style={{ marginBottom: 12 }}>
-                                        <span style={{ fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--accent-pink)', background: 'rgba(236, 72, 153, 0.1)', padding: '4px 12px', borderRadius: 16 }}>
-                                            {fortune.fortuneType === 'TAROT' ? '🃏 Tarot' :
-                                                fortune.fortuneType === 'KAHVE' ? '☕ Kahve Falı' :
-                                                    fortune.fortuneType === 'YILDIZNAME' ? '⭐ Yıldızname' : fortune.fortuneType}
-                                        </span>
-                                    </div>
-                                )}
-                                {fortune.question && (
-                                    <div style={{ marginBottom: fortune.imageUrl ? 12 : 0 }}>
-                                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: 4 }}>Soru & Niyet:</span>
-                                        <p style={{ color: 'rgba(255,255,255,0.9)', fontStyle: 'italic', fontSize: 13, lineHeight: 1.5 }}>"{fortune.question}"</p>
-                                    </div>
-                                )}
-                                {fortune.imageUrl && (
-                                    <div style={{ marginTop: 12 }}>
-                                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: 6 }}>Fincan / Görsel:</span>
-                                        <img loading="lazy" src={`${BACKEND_URL}${fortune.imageUrl}`} alt="Fortune Image" style={{ height: 100, borderRadius: 8, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} onClick={() => window.open(`${BACKEND_URL}${fortune.imageUrl}`, '_blank')} />
-                                    </div>
-                                )}
-                            </div>
-
-                            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                                <button
-                                    className="primary-btn"
-                                    style={{ flex: 1, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                    onClick={() => setSelectedFortune(fortune)}
-                                >
-                                    <Sparkles size={16} /> Falı Yorumla
-                                </button>
-                                <button
-                                    className="secondary-btn"
-                                    style={{ padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    onClick={() => navigate('/messages', { state: { openChatId: fortune.user.id } })}
-                                    title="Mesaj Gönder"
-                                >
-                                    <MessageCircle size={18} />
-                                </button>
-                            </div>
-                        </motion.div>
-                    ))}
+            {/* Stats Overview */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-section-gap">
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                    <div className="absolute -top-6 -right-6 w-24 h-24 bg-primary/20 rounded-full blur-2xl group-hover:bg-primary/30 transition-colors"></div>
+                    <span className="material-symbols-outlined text-primary text-3xl mb-2">visibility</span>
+                    <div className="font-headline-lg text-headline-lg text-on-surface font-bold">{stats.totalReadings}</div>
+                    <div className="font-label-sm text-label-sm text-on-surface-variant mt-1">Toplam Fal</div>
                 </div>
-            )}
+                
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                    <div className="absolute -top-6 -right-6 w-24 h-24 bg-secondary/20 rounded-full blur-2xl group-hover:bg-secondary/30 transition-colors"></div>
+                    <span className="material-symbols-outlined text-secondary text-3xl mb-2">star</span>
+                    <div className="font-headline-lg text-headline-lg text-on-surface font-bold">{stats.rating.toFixed(1)}</div>
+                    <div className="font-label-sm text-label-sm text-on-surface-variant mt-1">Ortalama Puan</div>
+                </div>
 
-            {/* Modal for Interpretation */}
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                    <div className="absolute -top-6 -right-6 w-24 h-24 bg-tertiary/20 rounded-full blur-2xl group-hover:bg-tertiary/30 transition-colors"></div>
+                    <span className="material-symbols-outlined text-tertiary text-3xl mb-2">auto_awesome</span>
+                    <div className="font-headline-lg text-headline-lg text-on-surface font-bold text-tertiary">{stats.earnedStardust}</div>
+                    <div className="font-label-sm text-label-sm text-on-surface-variant mt-1">Kazanılan Toz</div>
+                </div>
+            </section>
+
+            {/* Pending Fortunes */}
+            <section className="space-y-6">
+                <div className="flex justify-between items-end">
+                    <h2 className="font-headline-md text-headline-md text-on-surface">Bekleyen Fallar</h2>
+                    <span className="font-label-sm text-label-sm text-tertiary px-3 py-1 bg-tertiary/10 rounded-full border border-tertiary/20">
+                        {fortunes.length} İstek
+                    </span>
+                </div>
+
+                {fortunes.length === 0 ? (
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
+                        <span className="material-symbols-outlined text-6xl text-on-surface-variant/30 mb-4 block">self_improvement</span>
+                        <h3 className="font-headline-sm text-headline-sm text-on-surface mb-2">Şu an her şey sakin</h3>
+                        <p className="font-body-md text-body-md text-on-surface-variant">Yeni fal istekleri geldiğinde burada görünecek.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {fortunes.map((fortune, idx) => {
+                            const typeDisplay = getFortuneTypeDisplay(fortune.fortuneType);
+                            // Fake waiting time for display aesthetics (based on ID length or random if preferred, using a static '12 dk' for now as per design)
+                            const waitTime = `${Math.max(1, (idx + 1) * 12)} dk`;
+                            const userAvatar = fortune.user.avatar ? `${BACKEND_URL}${fortune.user.avatar}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(fortune.user.name)}&background=2d3449&color=fff`;
+
+                            return (
+                                <motion.div
+                                    initial={{ y: 20, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: idx * 0.1 }}
+                                    key={fortune.id}
+                                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col gap-4 hover:border-primary/50 transition-colors duration-300 relative overflow-hidden group cursor-default"
+                                >
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-primary/10 transition-colors"></div>
+                                    
+                                    <div className="flex justify-between items-start relative z-10">
+                                        <div className="flex gap-4 items-center">
+                                            <div className="w-14 h-14 rounded-full border border-white/20 overflow-hidden bg-surface-container-high shrink-0">
+                                                <img src={userAvatar} alt="Client" className="w-full h-full object-cover" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-label-md text-label-md text-on-surface capitalize">{fortune.user.name || 'Gizemli Ruh'}</h3>
+                                                <p className="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1 mt-1">
+                                                    <span className="material-symbols-outlined text-[16px] text-tertiary">flare</span> 
+                                                    {fortune.user.sunSign} Burcu
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <span className="font-label-sm text-label-sm text-error bg-error/10 px-2 py-1 rounded-md">Bekliyor ({waitTime})</span>
+                                            <span className="font-label-sm text-label-sm text-secondary bg-secondary/10 px-2 py-1 rounded-md">+{fortune.stardustPrice} ✨</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-surface-container-lowest/50 rounded-xl p-4 relative z-10 border border-white/5 min-h-[80px]">
+                                        {fortune.question ? (
+                                            <p className="font-label-sm text-label-sm text-on-surface-variant line-clamp-3 italic">
+                                                "{fortune.question}"
+                                            </p>
+                                        ) : (
+                                            <p className="font-label-sm text-label-sm text-on-surface-variant/50 italic">Belirli bir soru girilmemiş. Genel bir yorum bekliyor.</p>
+                                        )}
+                                        {fortune.imageUrl && (
+                                            <div className="mt-3 inline-block">
+                                                <span className="flex items-center gap-1 font-label-sm text-label-sm text-primary bg-primary/10 px-2 py-1 rounded-md">
+                                                    <span className="material-symbols-outlined text-[14px]">image</span>
+                                                    Görsel Eklendi
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex justify-between items-center mt-2 relative z-10">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`material-symbols-outlined ${typeDisplay.color} text-[20px]`}>{typeDisplay.icon}</span>
+                                            <span className={`font-label-md text-label-md ${typeDisplay.color}`}>{typeDisplay.label}</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => navigate('/messages', { state: { openChatId: fortune.user.id } })}
+                                                className="p-2 rounded-full border border-white/10 text-on-surface hover:bg-white/10 transition-colors"
+                                                title="Danışana Mesaj Gönder"
+                                            >
+                                                <span className="material-symbols-outlined">chat</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => setSelectedFortune(fortune)}
+                                                className="bg-primary-container text-on-primary-container font-label-md text-label-md px-6 py-2 rounded-full hover:shadow-[0_0_15px_rgba(147,51,234,0.5)] transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                                Fal Bak
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+
+            {/* Interpretation Modal */}
             <AnimatePresence>
                 {selectedFortune && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', padding: 16, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            className="glass-panel"
-                            style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', padding: 24, display: 'flex', flexDirection: 'column', border: '1px solid rgba(139,92,246,0.3)', boxShadow: '0 0 40px rgba(139,92,246,0.15)' }}
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                            animate={{ scale: 1, opacity: 1, y: 0 }} 
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }} 
+                            className="bg-surface border border-primary/30 shadow-[0_0_40px_rgba(147,51,234,0.15)] rounded-3xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
                         >
-                            <h2 style={{ fontSize: 22, fontWeight: 'bold', color: 'white', marginBottom: 20, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                                <Sparkles color="var(--accent-gold)" /> Yıldızların Mesajı
-                            </h2>
-
-                            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                                    <span style={{ color: 'white', fontWeight: 600 }}>{selectedFortune.user.name || 'Gizemli Yabancı'}</span> için yorumlanıyor
-                                </div>
-                                {selectedFortune.question && (
-                                    <div style={{ fontSize: 13, fontStyle: 'italic', color: 'rgba(255,255,255,0.8)', borderLeft: '2px solid var(--accent-purple)', paddingLeft: 12, marginTop: 12 }}>
-                                        "{selectedFortune.question}"
-                                    </div>
-                                )}
+                            <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center shrink-0">
+                                <h2 className="font-headline-md text-headline-md text-primary flex items-center gap-2">
+                                    <span className="material-symbols-outlined">auto_awesome</span> 
+                                    Yıldızların Mesajı
+                                </h2>
+                                <button onClick={() => { setSelectedFortune(null); setAudioUrl(null); setInterpretation(''); }} className="text-on-surface-variant hover:text-on-surface">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
                             </div>
 
-                            <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 20 }}>
-                                <textarea
-                                    style={{
-                                        width: '100%',
-                                        background: 'rgba(255,255,255,0.05)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: 12,
-                                        padding: 16,
-                                        color: 'white',
-                                        outline: 'none',
-                                        resize: 'none',
-                                        flex: 1,
-                                        minHeight: 200,
-                                        fontSize: 14
-                                    }}
-                                    placeholder="Yıldızların mesajını buraya yaz... Gözden kaçan detayları vurgula, geleceğe ışık tut."
-                                    value={interpretation}
-                                    onChange={(e) => setInterpretation(e.target.value)}
-                                // Removed tailwind className focus-ring, rely on traditional focus or existing global classes
-                                />
-                                <div style={{ position: 'absolute', top: 12, right: 12, fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4 }}>
-                                    {interpretation.length} karakter
-                                </div>
-                            </div>
-
-                            <div style={{ marginBottom: 20 }}>
-                                {audioUrl ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(167, 139, 250, 0.1)', padding: 12, borderRadius: 12, border: '1px solid rgba(167,139,246,0.3)' }}>
-                                        <audio controls src={`${BACKEND_URL}${audioUrl}`} style={{ height: 36, flex: 1 }} />
-                                        <button onClick={() => setAudioUrl(null)} style={{ color: 'var(--accent-pink)', fontSize: 14 }}>Sil</button>
-                                    </div>
-                                ) : (
-                                    <VoiceRecorder 
-                                        onRecordingComplete={handleAudioUpload} 
-                                        isUploading={uploadingAudio} 
-                                        maxDurationMs={180000} 
+                            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                                {/* Context Box */}
+                                <div className="bg-surface-container-highest rounded-xl p-4 border border-white/5 flex gap-4">
+                                    <img 
+                                        src={selectedFortune.user.avatar ? `${BACKEND_URL}${selectedFortune.user.avatar}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedFortune.user.name)}&background=2d3449&color=fff`} 
+                                        alt="Client" 
+                                        className="w-12 h-12 rounded-full object-cover border border-white/20 shrink-0" 
                                     />
+                                    <div>
+                                        <div className="font-label-md text-label-md text-on-surface mb-1 capitalize">
+                                            {selectedFortune.user.name} <span className="text-on-surface-variant font-normal">için yorumlanıyor</span>
+                                        </div>
+                                        {selectedFortune.question && (
+                                            <div className="font-body-sm text-sm text-on-surface-variant italic border-l-2 border-primary/50 pl-3 py-1">
+                                                "{selectedFortune.question}"
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Image Attachment */}
+                                {selectedFortune.imageUrl && (
+                                    <div>
+                                        <label className="block font-label-sm text-label-sm text-on-surface-variant mb-2">Danışanın Görseli (Tıklayarak büyütün)</label>
+                                        <div 
+                                            className="h-32 w-48 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-primary transition-colors"
+                                            onClick={() => window.open(`${BACKEND_URL}${selectedFortune.imageUrl}`, '_blank')}
+                                        >
+                                            <img src={`${BACKEND_URL}${selectedFortune.imageUrl}`} alt="Attachment" className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                                        </div>
+                                    </div>
                                 )}
+
+                                {/* Interpretation Input */}
+                                <div className="relative">
+                                    <label className="block font-label-md text-label-md text-on-surface-variant mb-3">Yazılı Yorum (Zorunlu veya Sesli)</label>
+                                    <textarea
+                                        value={interpretation}
+                                        onChange={(e) => setInterpretation(e.target.value)}
+                                        placeholder="Gözden kaçan detayları vurgula, geleceğe ışık tut..."
+                                        className="w-full bg-surface-container-lowest border border-white/10 rounded-xl p-4 font-body-md text-on-surface focus:outline-none focus:border-primary transition-all min-h-[200px] resize-y placeholder:text-on-surface-variant/40"
+                                    />
+                                    <div className={`absolute bottom-4 right-4 font-label-sm text-xs ${interpretation.length < 20 ? 'text-error' : 'text-tertiary'}`}>
+                                        {interpretation.length} / 20 karakter
+                                    </div>
+                                </div>
+
+                                {/* Audio Input */}
+                                <div>
+                                    <label className="block font-label-md text-label-md text-on-surface-variant mb-3">Sesli Yorum (Alternatif veya Ek)</label>
+                                    {audioUrl ? (
+                                        <div className="flex items-center gap-4 bg-primary/10 border border-primary/20 p-3 rounded-xl">
+                                            <audio controls src={`${BACKEND_URL}${audioUrl}`} className="flex-1 h-10" />
+                                            <button 
+                                                onClick={() => setAudioUrl(null)}
+                                                className="p-2 text-error hover:bg-error/20 rounded-full transition-colors shrink-0"
+                                                title="Ses Kaydını Sil"
+                                            >
+                                                <span className="material-symbols-outlined">delete</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <VoiceRecorder 
+                                            onRecordingComplete={handleAudioUpload} 
+                                            isUploading={uploadingAudio} 
+                                            maxDurationMs={180000} 
+                                        />
+                                    )}
+                                </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: 12, marginTop: 'auto' }}>
-                                <button className="secondary-btn" style={{ flex: 1, padding: '12px 0' }} onClick={() => { setSelectedFortune(null); setAudioUrl(null); setInterpretation(''); }}>İptal</button>
-                                <button
-                                    className="primary-btn"
-                                    style={{ flex: 1, padding: '12px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                    onClick={handleSubmitInterpretation}
+                            {/* Modal Footer */}
+                            <div className="p-4 border-t border-white/10 bg-white/5 flex gap-3 shrink-0">
+                                <button 
+                                    onClick={() => { setSelectedFortune(null); setAudioUrl(null); setInterpretation(''); }} 
+                                    className="flex-1 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 rounded-xl border border-white/10 transition-colors"
+                                >
+                                    İptal
+                                </button>
+                                <button 
+                                    onClick={handleSubmitInterpretation} 
                                     disabled={submitting || (interpretation.trim().length < 20 && !audioUrl)}
+                                    className="flex-[2] bg-primary-container text-on-primary-container font-label-md text-label-md rounded-xl shadow-[0_0_15px_rgba(147,51,234,0.4)] hover:bg-inverse-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                 >
                                     {submitting ? (
-                                        <div className="animate-spin" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'white', borderRadius: '50%' }} />
+                                        <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                                     ) : (
-                                        <><CheckCircle size={16} /> Gönder</>
+                                        <>Gönder ve Kazan <span className="material-symbols-outlined">send</span></>
                                     )}
                                 </button>
                             </div>
-                            {(!audioUrl && interpretation.trim().length > 0 && interpretation.trim().length < 20) && (
-                                <p style={{ textAlign: 'center', color: 'var(--accent-pink)', fontSize: 12, marginTop: 12 }}>Yorumunuz en az 20 karakter olmalıdır.</p>
-                            )}
                         </motion.div>
-                    </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </div>
     );
 };
 

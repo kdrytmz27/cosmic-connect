@@ -9,6 +9,8 @@ import { PageTransition } from './components/PageTransition';
 import { BrandLoader } from './components/BrandLoader';
 import { HardwareBackButton } from './components/HardwareBackButton';
 import Layout from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import Income from './pages/Income';
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'));
@@ -17,17 +19,22 @@ const Messages = lazy(() => import('./pages/Messages'));
 const Fortune = lazy(() => import('./pages/Fortune'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
-const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
+const Login = lazy(() => import('./features/auth/pages/Login'));
+const Register = lazy(() => import('./features/auth/pages/Register'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const Market = lazy(() => import('./pages/Market'));
+const CosmicVip = lazy(() => import('./pages/CosmicVip'));
+const Games = lazy(() => import('./pages/Games'));
+const Quests = lazy(() => import('./pages/Quests'));
 const TellerDashboard = lazy(() => import('./pages/TellerDashboard'));
 const TellerProfile = lazy(() => import('./pages/TellerProfile'));
 const TellerApplication = lazy(() => import('./pages/TellerApplication'));
 const SynastryAnalysis = lazy(() => import('./pages/SynastryAnalysis'));
+const PartyList = lazy(() => import('./pages/PartyList'));
+const PartyRoom = lazy(() => import('./pages/PartyRoom'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
-const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const ForgotPassword = lazy(() => import('./features/auth/pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./features/auth/pages/ResetPassword'));
 
 // Giriş yapmış kullanıcılar için koruma
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -117,6 +124,31 @@ const AnimatedRoutes = () => {
                 <PageTransition><Market /></PageTransition>
               </UserOnlyRoute>
             } />
+            <Route path="vip" element={
+              <UserOnlyRoute>
+                <PageTransition><CosmicVip /></PageTransition>
+              </UserOnlyRoute>
+            } />
+            <Route path="games" element={
+              <UserOnlyRoute>
+                <PageTransition><Games /></PageTransition>
+              </UserOnlyRoute>
+            } />
+            <Route path="quests" element={
+              <UserOnlyRoute>
+                <PageTransition><Quests /></PageTransition>
+              </UserOnlyRoute>
+            } />
+            <Route path="party" element={
+              <UserOnlyRoute>
+                <PageTransition><PartyList /></PageTransition>
+              </UserOnlyRoute>
+            } />
+            <Route path="party/:id" element={
+              <UserOnlyRoute>
+                <PageTransition><PartyRoom /></PageTransition>
+              </UserOnlyRoute>
+            } />
 
             {/* Falcı sayfaları */}
             <Route path="teller-dashboard" element={
@@ -137,6 +169,7 @@ const AnimatedRoutes = () => {
             <Route path="messages" element={<PageTransition><Messages /></PageTransition>} />
             <Route path="teller/:id" element={<PageTransition><TellerProfile /></PageTransition>} />
             <Route path="profile" element={<PageTransition><Profile /></PageTransition>} />
+            <Route path="income" element={<PageTransition><Income /></PageTransition>} />
             <Route path="profile/:id" element={<PageTransition><Profile /></PageTransition>} />
             <Route path="synastry/:id" element={<PageTransition><SynastryAnalysis /></PageTransition>} />
             <Route path="leaderboard" element={<PageTransition><Leaderboard /></PageTransition>} />
@@ -153,7 +186,9 @@ function App() {
       <HardwareBackButton />
       <ToastProvider>
         <AuthProvider>
-          <AnimatedRoutes />
+          <ErrorBoundary>
+            <AnimatedRoutes />
+          </ErrorBoundary>
         </AuthProvider>
       </ToastProvider>
     </HashRouter>

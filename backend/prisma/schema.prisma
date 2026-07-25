@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -32,6 +33,7 @@ model User {
   risingSign        String
   planetPositions   Json?    // Meeus/Moshier ile bir kez hesaplanıp saklanacak (CPU optimizasyonu)
   stardustBalance   Int      @default(0)
+  diamondBalance    Int      @default(0) // Çekilebilir Bakiye (Elmas)
   matchScore        Int      @default(100)
   cosmicStatus      String?
 
@@ -98,6 +100,11 @@ model User {
   notifications      Notification[]
   blockedUsers       BlockedUser[] @relation("BlockerUser")
   blockedBy          BlockedUser[] @relation("BlockedUserRel")
+
+  matchQueue         MatchQueue?
+  matchRooms1        MatchRoom[] @relation("MatchUser1")
+  matchRooms2        MatchRoom[] @relation("MatchUser2")
+  ownedParties       PartyRoom[]
 }
 
 model Notification {
@@ -141,7 +148,6 @@ model Friendship {
   user1 User @relation("FriendshipUser1", fields: [user1Id], references: [id])
   user2 User @relation("FriendshipUser2", fields: [user2Id], references: [id])
 
-  @@index([user1Id])
   @@index([user2Id])
   @@index([user1Id, user2Id])
 }
@@ -174,7 +180,7 @@ model FortuneTeller {
   fortuneTypes String @default("TAROT,KAHVE,EL")
   
   iban                 String?
-  withdrawableBalance  Int    @default(0) // Çekilebilir Yıldız Tozu veya TL karşılığı
+  // withdrawableBalance is deprecated in favor of User.diamondBalance
 
   user         User            @relation(fields: [userId], references: [id])
   appointments Appointment[]
@@ -327,4 +333,63 @@ model PayoutRequest {
 
   @@index([tellerId])
   @@index([status])
+}
+
+model MatchQueue {
+  userId      String   @id
+  socketId    String
+  matchScore  Int
+  isPremium   Boolean
+  karma       Int
+  sunSign     String?
+  joinedAt    DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MatchRoom {
+  id                String   @id @default(uuid())
+  p1Id              String
+  p2Id              String
+  createdAt         DateTime @default(now())
+  expiresAt         DateTime
+  extensionsCount   Int      @default(0)
+
+  user1 User @relation("MatchUser1", fields: [p1Id], references: [id], onDelete: Cascade)
+  user2 User @relation("MatchUser2", fields: [p2Id], references: [id], onDelete: Cascade)
+
+  @@index([p1Id])
+  @@index([p2Id])
+}
+
+model PartyRoom {
+  id                String   @id @default(uuid())
+  ownerId           String
+  title             String
+  description       String?
+  imageUrl          String?
+  coverUrl          String?
+  welcomeMessage    String?
+  announcement      String?
+  password          String?
+  isLocked          Boolean  @default(false)
+  micMode           String   @default("ALL") // ALL, MEMBERS, INVITE_ONLY
+  seatLayout        String   @default("8+1") // "16", "15+1", "8+1", "10", "12", "20", "30"
+  autoInvite        Boolean  @default(false)
+  chatEnabled       Boolean  @default(true)
+  maxParticipants   Int      @default(50)
+  currentCount      Int      @default(0)
+  isActive          Boolean  @default(true)
+  frameUrl          String?
+  backgroundUrl     String?
+  entryEffect       String?
+  seatLabels        Json?
+  moderators        Json     @default("[]")
+  bannedUsers       Json     @default("[]")
+  createdAt         DateTime @default(now())
+
+  owner             User     @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([isActive])
 }

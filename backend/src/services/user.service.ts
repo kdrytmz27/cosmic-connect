@@ -1,6 +1,7 @@
 import { prisma } from '../index';
 import { calculateQuickSynastryScore } from './synastry.service';
 import { horoscopeService } from './horoscope.service';
+import { calculateSunSign, calculateMoonSign, calculateRisingSign } from '../utils/astrology';
 import { xpService } from './xp.service';
 import { BadgeService } from './badge.service';
 import { CONSTANTS } from '../config/constants';
@@ -126,9 +127,16 @@ export class UserService {
         if (gender && gender !== 'ALL') whereClause.gender = gender as string;
         if (Object.keys(dateFilters).length > 0) whereClause.birthDate = dateFilters;
 
+        // BATCH PAGINATION FIX: Fetch a small batch from DB instead of entire table
+        // We fetch a larger batch (e.g. 50) because post-filtering (minScore) will reduce the number
+        const batchSize = limitNum * 3; 
+        const startIndex = (pageNum - 1) * batchSize;
+
         const candidates = await prisma.user.findMany({
             where: whereClause,
             orderBy: { id: 'asc' },
+            skip: startIndex,
+            take: batchSize,
             // Exclude sensitive fields from discovery results
             select: {
                 id: true, email: true, name: true, avatar: true, bio: true,
@@ -140,6 +148,9 @@ export class UserService {
                 cosmicStatus: true, latitude: true, longitude: true
             }
         });
+
+        // Fast count for total pages (caching this in a real app is better, but this is okay for now)
+        const totalCandidatesCount = await prisma.user.count({ where: whereClause });
 
         if (candidates.length === 0) return { message: 'No matches found right now', matches: [] };
 
@@ -184,14 +195,15 @@ export class UserService {
             return a.match.id.localeCompare(b.match.id);
         });
 
-        const startIndex = (pageNum - 1) * limitNum;
-        const paginated = filtered.slice(startIndex, startIndex + limitNum);
+        // We already paginated in the DB, so we return the filtered batch directly
+        // We limit to 'limitNum' just in case the batch yielded more good matches than requested
+        const paginated = filtered.slice(0, limitNum);
 
         return {
             matches: paginated,
-            total: filtered.length,
+            total: totalCandidatesCount, // Estimated total
             page: pageNum,
-            totalPages: Math.ceil(filtered.length / limitNum),
+            totalPages: Math.ceil(totalCandidatesCount / batchSize),
             dailySwipes: currentUser.dailySwipes,
             isPremium: currentUser.isPremium,
             stardustBalance: currentUser.stardustBalance
@@ -202,9 +214,28 @@ export class UserService {
         const dataToUpdate: any = {};
         // REMOVED 'avatar' to prevent Arbitrary File Deletion / Path Traversal
         // REMOVED 'moonSign' and 'risingSign' to prevent Astrology Score Cheating!
-        const allowedKeys = ['name', 'bio', 'hobby', 'music', 'weekend', 'lookingForHobby', 'lookingForMusic', 'lookingForWeekend'];
+        const allowedKeys = ['name', 'bio', 'hobby', 'music', 'weekend', 'lookingForHobby', 'lookingForMusic', 'lookingForWeekend', 'latitude', 'longitude'];
         for (const key of allowedKeys) {
             if (updateData[key] !== undefined) dataToUpdate[key] = updateData[key];
+        }
+
+        if (updateData.birthDate) {
+            const dateObj = new Date(updateData.birthDate);
+            if (!isNaN(dateObj.getTime())) {
+                const day = dateObj.getUTCDate();
+                const month = dateObj.getUTCMonth() + 1;
+                const year = dateObj.getUTCFullYear();
+                
+                const sunSign = calculateSunSign(day, month);
+                const moonSign = calculateMoonSign(year, month, day);
+                const risingSign = updateData.birthTime ? calculateRisingSign(updateData.birthTime, sunSign) : 'Unknown';
+                
+                dataToUpdate.birthDate = dateObj; // Fix: use Date object for Prisma
+                if (updateData.birthTime) dataToUpdate.birthTime = updateData.birthTime;
+                dataToUpdate.sunSign = sunSign;
+                dataToUpdate.moonSign = moonSign;
+                dataToUpdate.risingSign = risingSign;
+            }
         }
 
         const updated = await prisma.user.update({

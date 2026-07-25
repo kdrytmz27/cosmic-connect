@@ -75,10 +75,11 @@ async function createTestUser(data, role = 'STANDARD', stardust = 1000) {
     });
 }
 async function cleanDatabase() {
-    // Delete in correct order to respect foreign keys
-    await index_1.prisma.tellerComment.deleteMany();
+    // Delete in correct order to respect foreign keys (Children first)
     await index_1.prisma.appointment.deleteMany();
+    await index_1.prisma.tellerComment.deleteMany();
     await index_1.prisma.fortuneTeller.deleteMany();
+    // Other relations dependent on User
     await index_1.prisma.tellerApplication.deleteMany();
     await index_1.prisma.report.deleteMany();
     await index_1.prisma.friendRequest.deleteMany();
@@ -89,6 +90,7 @@ async function cleanDatabase() {
     await index_1.prisma.notification.deleteMany();
     await index_1.prisma.blockedUser.deleteMany();
     await index_1.prisma.photo.deleteMany();
+    // Dependent base entities
     await index_1.prisma.user.deleteMany();
 }
 //# sourceMappingURL=setup.js.map

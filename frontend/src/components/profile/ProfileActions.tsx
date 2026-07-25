@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Heart } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ProfileActionsProps {
@@ -7,7 +7,7 @@ interface ProfileActionsProps {
     friendStatus: any;
     friendReqRemaining: number;
     saving: boolean;
-    handleSendFriendRequest: () => void;
+    handleSendLike: () => void;
     handleSuperLike: () => void;
     handleSendGift: () => void;
     handleBlock: () => void;
@@ -22,7 +22,7 @@ export const ProfileActions = ({
     friendStatus,
     friendReqRemaining,
     saving,
-    handleSendFriendRequest,
+    handleSendLike,
     handleSuperLike,
     handleSendGift,
     handleBlock,
@@ -47,22 +47,44 @@ export const ProfileActions = ({
                         <div style={{ width: '100%', padding: '14px 20px', borderRadius: 16, background: 'rgba(255,255,255,0.05)', color: 'var(--accent-pink)', textAlign: 'center', fontWeight: 'bold', fontSize: 15 }}>
                             Sana İstek Gönderdi (Mesajlardan Onayla)
                         </div>
-                    ) : (
+                    ) : friendStatus === 'MATCH' ? (
                         <div>
+                            <div style={{ width: '100%', padding: '14px 20px', borderRadius: 16, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', color: 'var(--accent-purple)', textAlign: 'center', fontWeight: 'bold', fontSize: 15, marginBottom: 12 }}>
+                                ⏳ Eşleşme Sürüyor ⏳
+                            </div>
                             <button
-                                onClick={handleSendFriendRequest}
+                                onClick={handleSendLike}
                                 disabled={saving}
                                 style={{
                                     width: '100%', padding: '14px 20px', borderRadius: 16,
-                                    background: 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(14,165,233,0.15))',
-                                    border: '1px solid rgba(56,189,248,0.25)',
+                                    background: 'linear-gradient(135deg, rgba(236,72,153,0.15), rgba(190,24,93,0.15))',
+                                    border: '1px solid rgba(236,72,153,0.25)',
                                     color: 'white', cursor: 'pointer', fontWeight: 'bold', fontSize: 15,
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                                     transition: 'all 0.3s'
                                 }}
                             >
-                                <Sparkles size={18} color="#38bdf8" />
-                                Arkadaşlık İsteği Gönder
+                                <Heart size={18} color="var(--accent-pink)" />
+                                Beğen
+                            </button>
+                            {!user?.isPremium && <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 4 }}>Kalan İstek Hakkı: {friendReqRemaining}</div>}
+                        </div>
+                    ) : (
+                        <div>
+                            <button
+                                onClick={handleSendLike}
+                                disabled={saving}
+                                style={{
+                                    width: '100%', padding: '14px 20px', borderRadius: 16,
+                                    background: 'linear-gradient(135deg, rgba(236,72,153,0.15), rgba(190,24,93,0.15))',
+                                    border: '1px solid rgba(236,72,153,0.25)',
+                                    color: 'white', cursor: 'pointer', fontWeight: 'bold', fontSize: 15,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                    transition: 'all 0.3s'
+                                }}
+                            >
+                                <Heart size={18} color="var(--accent-pink)" />
+                                Beğen
                             </button>
                             {!user?.isPremium && <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 4 }}>Kalan İstek Hakkı: {friendReqRemaining}</div>}
                         </div>

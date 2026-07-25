@@ -62,11 +62,6 @@ export const updateCosmicStatus = async (req: Request, res: Response) => {
     res.json(result);
 };
 
-export const reportUser = async (req: Request, res: Response) => {
-    // Placeholder implementation
-    res.json({ success: true });
-};
-
 // ------------------------
 // SYNASTRY REPORT (Astrology compatibility between two exact users)
 // ------------------------
@@ -245,10 +240,12 @@ export const getFriendRequestStatus = async (req: Request, res: Response) => {
 export const getMessages = async (req: Request, res: Response) => {
     const userId = req.user?.userId;
     const friendId = req.params.id as string;
+    const cursor = req.query.cursor as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
     if (!userId) throw new UnauthorizedError();
 
-    const messages = await messageService.getMessages(userId, friendId);
-    res.json({ messages });
+    const result = await messageService.getMessages(userId, friendId, cursor, limit);
+    res.json(result);
 };
 
 export const sendMessage = async (req: Request, res: Response) => {
@@ -256,6 +253,80 @@ export const sendMessage = async (req: Request, res: Response) => {
     const { receiverId, content, imageUrl, audioUrl } = req.body;
     if (!userId || !receiverId) throw new BadRequestError('Missing parameters');
 
-    const msg = await messageService.sendMessage(userId, receiverId, content, imageUrl, audioUrl);
+    const cleanContent = content ? content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : content;
+
+    const msg = await messageService.sendMessage(userId, receiverId, cleanContent, imageUrl, audioUrl);
     res.json({ message: msg });
+};
+
+// ------------------------
+// TRANSACTIONS & ECONOMY
+// ------------------------
+
+export const getTransactions = async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) throw new UnauthorizedError();
+
+    const transactions = await prisma.gift.findMany({
+        where: {
+            OR: [
+                { senderId: userId },
+                { receiverId: userId }
+            ]
+        },
+        include: {
+            sender: { select: { name: true, avatar: true } },
+            receiver: { select: { name: true, avatar: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+    });
+
+    const formattedTransactions: any[] = [];
+    
+    transactions.forEach(t => {
+        if (t.senderId === userId && t.receiverId === userId) {
+            // Kendine hediye atma: İki ayrı kayıt göster (Hem harcama hem gelir)
+            formattedTransactions.push({
+                id: t.id + '-expense',
+                type: 'expense',
+                amount: t.stardustCost,
+                originalCost: t.stardustCost,
+                currency: 'stardust',
+                from: 'Kendinize',
+                to: 'Kendinize',
+                gift: t.giftType,
+                date: t.createdAt.toISOString()
+            });
+            formattedTransactions.push({
+                id: t.id + '-income',
+                type: 'income',
+                amount: Math.floor(t.stardustCost * 0.3),
+                originalCost: t.stardustCost,
+                currency: 'diamond',
+                from: 'Kendinizden',
+                to: 'Kendinize',
+                gift: t.giftType,
+                date: t.createdAt.toISOString()
+            });
+        } else {
+            const type = t.receiverId === userId ? 'income' : 'expense';
+            const amount = t.stardustCost;
+            const earned = type === 'income' ? Math.floor(amount * 0.3) : amount;
+            
+            formattedTransactions.push({
+                id: t.id,
+                type,
+                amount: earned,
+                originalCost: amount,
+                currency: type === 'income' ? 'diamond' : 'stardust',
+                from: t.sender?.name || 'Bilinmeyen Kullanıcı',
+                to: t.receiver?.name || 'Bilinmeyen Kullanıcı',
+                gift: t.giftType,
+                date: t.createdAt.toISOString()
+            });
+        }
+    });
+
+    res.json({ transactions: formattedTransactions });
 };

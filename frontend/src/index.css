@@ -1,5 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 :root {
   --bg-color: #0b0b0f;
   --bg-gradient: radial-gradient(circle at top right, #1a153a, #0b0b0f);

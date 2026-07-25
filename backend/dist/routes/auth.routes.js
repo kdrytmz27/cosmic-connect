@@ -16,6 +16,8 @@ const authLimiter = (0, express_rate_limit_1.default)({
 });
 router.post('/register', authLimiter, auth_controller_1.register);
 router.post('/login', authLimiter, auth_controller_1.login);
+router.post('/forgot-password', authLimiter, auth_controller_1.forgotPassword);
+router.post('/reset-password', authLimiter, auth_controller_1.resetPassword);
 // 2FA Endpoints
 router.post('/2fa/setup', auth_middleware_1.authenticate, auth_controller_1.setup2FA);
 router.post('/2fa/verify', auth_middleware_1.authenticate, auth_controller_1.verify2FA);

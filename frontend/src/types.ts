@@ -27,8 +27,9 @@ export interface IFriend {
     isExpired?: boolean;
     isMatch?: boolean;
     expiresAt?: string;
-    lastMessage?: ILastMessage;
-    hasMessages?: boolean;
+    hasMessages: boolean;
+    lastMessage?: ILastMessage | null;
+    unreadCount?: number;
     sunSign?: string;
     cosmicStatus?: string;
     isOnline?: boolean;
@@ -70,4 +71,42 @@ export interface IZodiacSign {
     id: string;
     tr: string;
     emoji: string;
+}
+
+export interface IPartyParticipant {
+    id: string;
+    roomId: string;
+    userId: string;
+    role: 'HOST' | 'CO_HOST' | 'SPEAKER' | 'LISTENER';
+    seatIndex: number | null;
+    isMuted: boolean;
+    user?: {
+        id: string;
+        name: string;
+        avatar: string;
+        sunSign: string;
+        cosmicStatus?: string;
+    };
+}
+
+export interface IPartyRoom {
+    id: string;
+    name: string;
+    topic?: string;
+    hostId: string;
+    status: 'ACTIVE' | 'CLOSED';
+    maxSeats: number;
+    layout: 'STAGE' | 'CIRCLE' | 'ASTRO_WHEEL';
+    entryFee: number;
+    host?: {
+        id: string;
+        name: string;
+        avatar: string;
+        sunSign: string;
+        cosmicStatus?: string;
+    };
+    participants?: IPartyParticipant[];
+    _count?: {
+        participants: number;
+    };
 }

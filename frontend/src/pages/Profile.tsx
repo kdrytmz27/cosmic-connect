@@ -1,31 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Settings, Loader, Edit2, ArrowLeft, Sparkles } from 'lucide-react';
+import { Edit2, ArrowLeft, Sparkles, LogOut, Crown, Diamond } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
-import { motion } from 'framer-motion';
-import { NatalChart } from '../components/NatalChart';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Income } from './Income';
+import { BrandLoader } from '../components/BrandLoader';
+import { translateZodiac } from '../utils/zodiac';
 
+// Component Imports
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileGamification } from '../components/profile/ProfileGamification';
 import { ProfileHoroscope } from '../components/profile/ProfileHoroscope';
 import { ProfileGallery } from '../components/profile/ProfileGallery';
 import { ProfileActions } from '../components/profile/ProfileActions';
-import { DailyQuests } from '../components/profile/DailyQuests';
 import { premiumApi } from '../api/premium';
 import { economyApi } from '../api/economy';
+import { NatalChart } from '../components/NatalChart';
+
+const COSMIC_STATUSES = [
+    { id: '1', emoji: '🌕', text: 'Dolunay Enerjisi' },
+    { id: '2', emoji: '☿', text: 'Merkür Retrosu' },
+    { id: '3', emoji: '✨', text: 'Flow Halindeyim' },
+    { id: '4', emoji: '🔮', text: 'Keşif Modu' },
+    { id: '5', emoji: '🌊', text: 'Duygusal' },
+    { id: '6', emoji: '🔥', text: 'Motivasyon Dolu' },
+];
 
 const Profile = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { userId, logout, updateEconomy, user } = useAuth();
+    const { userId, logout, updateEconomy, user, stardustBalance } = useAuth();
     const { showToast } = useToast();
     const targetId = id || userId;
     const isOwner = !id || id === userId;
 
     const [profile, setProfile] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [showIncome, setShowIncome] = useState(false);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [uploadingGallery, setUploadingGallery] = useState(false);
 
@@ -42,17 +56,9 @@ const Profile = () => {
     const [friendStatus, setFriendStatus] = useState<any>(null);
     const [friendReqRemaining, setFriendReqRemaining] = useState<number>(0);
 
-    const COSMIC_STATUSES = [
-        { id: '1', emoji: '🌕', text: 'Dolunay Enerjisi' },
-        { id: '2', emoji: '☿', text: 'Merkür Retrosu' },
-        { id: '3', emoji: '✨', text: 'Flow Halindeyim' },
-        { id: '4', emoji: '🔮', text: 'Keşif Modu' },
-        { id: '5', emoji: '🌊', text: 'Duygusal' },
-        { id: '6', emoji: '🔥', text: 'Motivasyon Dolu' },
-    ];
-
     useEffect(() => {
         if (targetId) {
+            setLoading(true);
             api.get(`/user/profile/${targetId}`).then(res => {
                 setProfile(res.data);
                 setName(res.data.profile.name || res.data.profile.email?.split('@')[0] || 'Kozmik Yolcu');
@@ -61,7 +67,8 @@ const Profile = () => {
                 setMusic(res.data.profile.music || '');
                 setWeekend(res.data.profile.weekend || '');
                 setCosmicStatus(res.data.profile.cosmicStatus || null);
-            }).catch(console.error);
+            }).catch(console.error)
+            .finally(() => setLoading(false));
 
             if (!isOwner) {
                 api.get(`/user/friend-request-status/${targetId}`).then(res => {
@@ -72,19 +79,14 @@ const Profile = () => {
         }
     }, [targetId, isOwner]);
 
-    const handleSendFriendRequest = async () => {
+    const handleSendLike = async () => {
         setSaving(true);
         try {
-            const res = await api.post('/user/friend-request', { receiverId: targetId });
-            setFriendStatus(res.data.autoAccepted ? 'friends' : 'sent');
-            setFriendReqRemaining(res.data.remaining);
-            showToast(res.data.autoAccepted ? 'Arkadaş oldunuz! ✨' : 'İstek gönderildi 💫', 'success');
+            const res = await api.post('/user/friend', { receiverId: targetId });
+            setFriendStatus(res.data.matched ? 'MATCH' : 'sent');
+            showToast(res.data.matched ? 'Eşleşme oluştu! 💛' : 'Beğeni gönderildi 💫', 'success');
         } catch (err: any) {
-            if (err.response?.status === 403 && err.response?.data?.error?.includes('limit')) {
-                showToast('Günlük arkadaşlık isteği limitine ulaştınız (5/5).', 'error');
-            } else {
-                showToast(err.response?.data?.error || 'İstek gönderilemedi', 'error');
-            }
+            showToast(err.response?.data?.error || 'Beğeni gönderilemedi', 'error');
         } finally {
             setSaving(false);
         }
@@ -127,7 +129,7 @@ const Profile = () => {
     };
 
     const updateStatus = async (status: string) => {
-        const newStatus = status === cosmicStatus ? null : status; // Toggle off if clicked again
+        const newStatus = status === cosmicStatus ? null : status;
         setCosmicStatus(newStatus);
         setProfile({ ...profile, profile: { ...profile.profile, cosmicStatus: newStatus } });
         try {
@@ -196,7 +198,7 @@ const Profile = () => {
             try {
                 await api.post(`/user/block/${targetId}`);
                 showToast('Kullanıcı engellendi.', 'success');
-                navigate('/messages'); // Geri dön
+                navigate('/messages');
             } catch (err: any) {
                 showToast(err.response?.data?.error || 'Engelleme başarısız', 'error');
             }
@@ -205,42 +207,68 @@ const Profile = () => {
 
     const handleReport = async () => {
         if (!targetId || isOwner) return;
-        const reason = window.prompt('Lütfen şikayet nedeninizi kısaca açıklayın (örn. spam, küfür):');
+        const reason = window.prompt('Lütfen şikayet nedeninizi kısaca açıklayın:');
         if (reason && reason.trim() !== '') {
             try {
                 await api.post(`/user/report/${targetId}`, { reason });
-                showToast('Şikayetiniz alındı, teşekkürler.', 'success');
+                showToast('Şikayetiniz alındı.', 'success');
             } catch (err: any) {
                 showToast(err.response?.data?.error || 'Şikayet iletilemedi', 'error');
             }
         }
     };
 
-    if (!profile || !profile.profile) return <div style={{ display: 'flex', justifyContent: 'center', marginTop: 40 }}><Loader className="animate-spin text-accent" size={32} /></div>;
+    if (loading || !profile || !profile.profile) return <BrandLoader message="Yıldız haritası çıkarılıyor..." />;
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: 24, paddingBottom: 100, maxWidth: 600, margin: '0 auto' }}>
-            <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {!isOwner && (
-                            <button onClick={() => navigate(-1)} style={{ background: 'var(--card-border)', padding: 8, borderRadius: '50%', border: 'none', cursor: 'pointer', color: 'white' }}>
-                                <ArrowLeft size={20} />
-                            </button>
-                        )}
-                    </div>
-                    {isOwner && (
-                        <div>
-                            {!isEditing && (
-                                <button onClick={() => setIsEditing(true)} style={{ marginRight: 16 }}>
-                                    <Edit2 size={20} color="var(--accent-pink)" />
-                                </button>
-                            )}
-                            <button onClick={logout}><Settings size={20} color="var(--text-secondary)" /></button>
-                        </div>
+        <div className="flex-1 pt-8 px-container-margin max-w-3xl mx-auto w-full pb-24">
+            
+            {/* Action Bar */}
+            <header className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                    {!isOwner && (
+                        <button 
+                            onClick={() => navigate(-1)} 
+                            className="p-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-on-surface"
+                        >
+                            <ArrowLeft size={24} />
+                        </button>
                     )}
+                    <h1 className="font-headline-lg text-headline-lg text-primary">{isOwner ? 'Kozmik Profilim' : 'Kozmik Yolcu'}</h1>
                 </div>
+                {isOwner && (
+                    <div className="flex items-center gap-2">
+                        {!isEditing && (
+                            <>
+                                <button 
+                                    onClick={() => navigate('/vip')} 
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-pink)] text-black font-bold border border-transparent rounded-full hover:shadow-[0_0_15px_rgba(255,215,0,0.5)] transition-all"
+                                >
+                                    <Crown size={16} /> <span className="hidden md:inline text-xs uppercase tracking-wider">VIP</span>
+                                </button>
+                            <button 
+                                onClick={() => setIsEditing(true)} 
+                                className="flex items-center gap-2 px-4 py-2 bg-secondary/10 text-secondary border border-secondary/30 rounded-full hover:bg-secondary/20 transition-colors"
+                            >
+                                <Edit2 size={16} /> <span className="hidden md:inline font-label-md">Düzenle</span>
+                            </button>
+                            </>
+                        )}
+                        <button 
+                            onClick={logout}
+                            className="p-2 rounded-full bg-error/10 text-error border border-error/30 hover:bg-error/20 transition-colors"
+                            title="Çıkış Yap"
+                        >
+                            <LogOut size={20} />
+                        </button>
+                    </div>
+                )}
+            </header>
 
+            {/* Main Profile Structure */}
+            <div className="flex flex-col gap-section-gap">
+                
+                {/* User Info Header Component */}
                 <ProfileHeader
                     isOwner={isOwner}
                     isEditing={isEditing}
@@ -261,8 +289,61 @@ const Profile = () => {
 
                 {!isEditing && (
                     <>
-                        {isOwner && <DailyQuests />}
+                        {/* Stardust Balance Card */}
+                        {isOwner && (
+                            <div className="bg-surface-container-highest border border-tertiary/30 rounded-2xl p-4 flex justify-between items-center shadow-[0_0_15px_rgba(255,198,64,0.1)]">
+                                <div className="flex items-center gap-3">
+                                    <span className="material-symbols-outlined text-3xl text-tertiary">stars</span>
+                                    <div>
+                                        <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Yıldız Tozu Bakiyen</h3>
+                                        <p className="font-headline-md text-headline-md text-tertiary font-bold">{stardustBalance || 0}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => navigate('/market')} className="px-4 py-2 bg-tertiary/10 text-tertiary border border-tertiary/30 rounded-full font-label-sm hover:bg-tertiary hover:text-on-tertiary transition-colors">
+                                    Satın Al
+                                </button>
+                            </div>
+                        )}
 
+                        {/* Income Access Button */}
+                        {isOwner && (
+                             <button 
+                                onClick={() => setShowIncome(true)}
+                                className="w-full flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-colors"
+                             >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary/20 rounded-xl">
+                                        <Diamond size={20} className="text-primary" />
+                                    </div>
+                                    <div className="text-left">
+                                        <h3 className="font-semibold text-on-surface">Gelir ve Elmaslar</h3>
+                                        <p className="text-xs text-on-surface-variant">Kazançlarınızı görüntüleyin</p>
+                                    </div>
+                                </div>
+                                <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+                             </button>
+                        )}
+
+                        {/* Daily Quests Link */}
+                        {isOwner && (
+                            <button 
+                                onClick={() => navigate('/quests')}
+                                className="w-full bg-gradient-to-r from-tertiary/20 to-primary/20 border border-white/10 rounded-2xl p-6 flex justify-between items-center hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(255,198,64,0.15)] group"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-tertiary/20 rounded-full flex items-center justify-center border border-tertiary/30">
+                                        <span className="material-symbols-outlined text-tertiary text-2xl group-hover:scale-110 transition-transform">task_alt</span>
+                                    </div>
+                                    <div className="text-left">
+                                        <h3 className="font-headline-md text-headline-md text-on-surface">Görevlerim</h3>
+                                        <p className="font-label-sm text-label-sm text-on-surface-variant">Görevleri tamamla, ödülleri kap!</p>
+                                    </div>
+                                </div>
+                                <span className="material-symbols-outlined text-tertiary">chevron_right</span>
+                            </button>
+                        )}
+
+                        {/* Gamification & Badges */}
                         <ProfileGamification
                             level={profile.profile.level}
                             xp={profile.profile.xp}
@@ -270,81 +351,104 @@ const Profile = () => {
                             karma={profile.profile.karma}
                         />
 
-                        {/* Uyum Skoru (başka profil görüntülenirken) */}
+                        {/* Compatibility Score for Visitors */}
                         {!isOwner && profile.compatibility && (
-                            <div style={{
-                                background: 'rgba(255, 215, 0, 0.1)', padding: 16, borderRadius: 16,
-                                border: '1px solid rgba(255, 215, 0, 0.3)', marginBottom: 20, textAlign: 'center'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
-                                    <Sparkles size={18} color="var(--accent-gold)" />
-                                    <span style={{ fontSize: 22, fontWeight: 'bold', color: 'var(--accent-gold)' }}>
-                                        %{profile.compatibility.score} Uyum
-                                    </span>
+                            <div className="bg-gradient-to-r from-secondary/20 to-transparent p-[1px] rounded-2xl relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-secondary/10 blur-xl"></div>
+                                <div className="bg-surface-container-highest p-6 rounded-[15px] relative z-10 flex flex-col items-center text-center">
+                                    <div className="flex items-center justify-center gap-2 mb-2">
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center min-w-[100px]">
+                                            <span className="text-3xl mb-2">☀️</span>
+                                            <span className="font-label-sm text-on-surface-variant mb-1">Güneş</span>
+                                            <span className="font-headline-sm text-primary">{translateZodiac(profile.profile.sunSign)}</span>
+                                        </div>
+                                        <Sparkles size={24} className="text-secondary" />
+                                        <span className="font-headline-lg text-headline-lg text-secondary">
+                                            %{profile.compatibility.score} Uyum
+                                        </span>
+                                    </div>
+                                    <p className="font-body-md text-body-md text-on-surface-variant mb-4">
+                                        Yıldızlarınız birbiriyle iletişim kuruyor.
+                                    </p>
+                                    <button
+                                        onClick={() => navigate(`/synastry/${targetId}`)}
+                                        className="w-full py-3 bg-secondary/10 border border-secondary text-secondary font-label-md font-bold rounded-xl hover:bg-secondary hover:text-on-secondary transition-colors"
+                                    >
+                                        Detaylı Astromatik Analizi Gör
+                                    </button>
                                 </div>
-                                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                                </p>
-                                <button
-                                    onClick={() => navigate(`/synastry/${targetId}`)}
-                                    style={{ width: '100%', padding: '10px', marginTop: 12, borderRadius: 10, background: 'rgba(255,215,0,0.15)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', transition: 'all 0.2s' }}
-                                >
-                                    <Sparkles size={16} fill="var(--accent-gold)" /> Detaylı Astromatik Analizi Gör
-                                </button>
                             </div>
                         )}
 
-                        {profile.profile.stardustBalance !== undefined && (
-                            <p style={{ color: 'var(--accent-purple)', fontWeight: 600, fontSize: 16, marginBottom: 16, textAlign: 'center' }}>{profile.profile.stardustBalance} Yıldız Tozu</p>
-                        )}
-
                         {/* Cosmic Status Picker */}
-                        {isOwner ? (
-                            <div style={{ marginBottom: 24, textAlign: 'left' }}>
-                                <h3 style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8, textAlign: 'center' }}>Kozmik Durumum</h3>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                        <section className="bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+                            <h3 className="font-headline-sm text-headline-sm text-on-surface mb-4 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-tertiary">mood</span>
+                                Kozmik Durum
+                            </h3>
+                            {isOwner ? (
+                                <div className="flex flex-wrap gap-2">
                                     {COSMIC_STATUSES.map(s => (
                                         <button
                                             key={s.id}
                                             onClick={() => updateStatus(s.text)}
-                                            style={{
-                                                padding: '6px 12px', borderRadius: 20, fontSize: 12,
-                                                background: cosmicStatus === s.text ? 'var(--accent-purple)' : 'rgba(255,255,255,0.05)',
-                                                border: `1px solid ${cosmicStatus === s.text ? 'var(--accent-pink)' : 'var(--card-border)'}`,
-                                                color: cosmicStatus === s.text ? 'white' : 'var(--text-secondary)',
-                                                cursor: 'pointer', transition: 'all 0.2s',
-                                                display: 'flex', alignItems: 'center', gap: 4
-                                            }}
+                                            className={`px-4 py-2 rounded-full font-label-sm text-label-sm flex items-center gap-2 transition-all ${
+                                                cosmicStatus === s.text 
+                                                ? 'bg-tertiary text-on-tertiary shadow-[0_0_15px_rgba(255,198,64,0.4)] border-tertiary scale-105' 
+                                                : 'bg-surface border border-white/10 text-on-surface-variant hover:bg-white/10 hover:border-white/20'
+                                            }`}
                                         >
-                                            <span>{s.emoji}</span> {s.text}
+                                            <span className="text-lg">{s.emoji}</span> {s.text}
                                         </button>
                                     ))}
                                 </div>
-                            </div>
-                        ) : (
-                            profile.profile.cosmicStatus && (
-                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '6px 14px', borderRadius: 20 }}>
-                                        <span style={{ fontSize: 14 }}>{COSMIC_STATUSES.find(s => s.text === profile.profile.cosmicStatus)?.emoji || '✨'}</span>
-                                        <span style={{ fontSize: 13, color: 'var(--accent-purple)', fontWeight: 600 }}>{profile.profile.cosmicStatus}</span>
+                            ) : (
+                                profile.profile.cosmicStatus && (
+                                    <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-tertiary/10 border border-tertiary/30">
+                                        <span className="text-2xl">{COSMIC_STATUSES.find(s => s.text === profile.profile.cosmicStatus)?.emoji || '✨'}</span>
+                                        <span className="font-label-md text-label-md text-tertiary font-bold">{profile.profile.cosmicStatus}</span>
                                     </div>
+                                )
+                            )}
+                        </section>
+
+                        {/* Astrological Chart */}
+                        {profile.profile.sunSign && (
+                            <section className="bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10 relative overflow-hidden group min-h-[380px] flex flex-col items-center">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-primary/30 transition-colors"></div>
+                                <h3 className="font-headline-md text-headline-md text-on-surface mb-6 flex items-center gap-2 relative z-10 self-start">
+                                    <Sparkles className="text-primary" size={20} />
+                                    Kozmik Harita
+                                </h3>
+                                <div className="relative z-10 w-full flex justify-center mb-4">
+                                    <NatalChart
+                                        sunSign={profile.profile.sunSign}
+                                        moonSign={profile.profile.moonSign}
+                                        risingSign={profile.profile.risingSign}
+                                    />
                                 </div>
-                            )
+                                <div className="flex flex-wrap justify-center gap-2 mt-auto relative z-10 w-full pt-4">
+                                    {profile.profile.hobby && <span className="px-3 py-1 bg-white/10 rounded-full font-label-sm text-label-sm text-on-surface-variant">{profile.profile.hobby}</span>}
+                                    {profile.profile.music && <span className="px-3 py-1 bg-white/10 rounded-full font-label-sm text-label-sm text-on-surface-variant">{profile.profile.music}</span>}
+                                    {profile.profile.weekend && <span className="px-3 py-1 bg-white/10 rounded-full font-label-sm text-label-sm text-on-surface-variant">{profile.profile.weekend}</span>}
+                                </div>
+                            </section>
                         )}
 
-                        {/* Natal Chart Section */}
-                        {profile.profile.sunSign && (
-                            <div style={{ marginBottom: 32, background: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: '24px 16px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
-                                <h3 style={{ fontSize: 18, color: 'white', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                    <Sparkles size={18} color="var(--accent-gold)" /> Kozmik Harita
+                        {/* Match Highlights for Visitors */}
+                        {profile.matchHighlights && profile.matchHighlights.length > 0 && (
+                            <div className="bg-error/10 border border-error/20 p-4 rounded-xl">
+                                <h3 className="font-label-md text-error mb-2 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[18px]">favorite</span>
+                                    Arayışlarınla Eşleşiyor
                                 </h3>
-                                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, textAlign: 'center' }}>
-                                    Güneş, Ay ve Yükselen yerleşimleri
-                                </p>
-                                <NatalChart
-                                    sunSign={profile.profile.sunSign}
-                                    moonSign={profile.profile.moonSign}
-                                    risingSign={profile.profile.risingSign}
-                                />
+                                <ul className="space-y-1">
+                                    {profile.matchHighlights.map((h: string, i: number) => (
+                                        <li key={i} className="font-body-sm text-on-surface-variant flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 bg-error rounded-full"></span> {h}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
 
@@ -354,7 +458,7 @@ const Profile = () => {
                             friendStatus={friendStatus}
                             friendReqRemaining={friendReqRemaining}
                             saving={saving}
-                            handleSendFriendRequest={handleSendFriendRequest}
+                            handleSendLike={handleSendLike}
                             handleSuperLike={handleSuperLike}
                             handleSendGift={handleSendGift}
                             handleBlock={handleBlock}
@@ -363,33 +467,12 @@ const Profile = () => {
                             user={user}
                         />
 
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ padding: '4px 12px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Güneş: {profile.profile.sunSign}</span>
-                            <span style={{ padding: '4px 12px', background: 'rgba(139, 92, 246, 0.2)', color: '#a855f7', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Ay: {profile.profile.moonSign}</span>
-                            <span style={{ padding: '4px 12px', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Yükselen: {profile.profile.risingSign}</span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap', marginTop: 12 }}>
-                            {profile.profile.hobby && <span style={{ padding: '4px 12px', background: 'rgba(255, 255, 255, 0.1)', color: '#ddd', borderRadius: 8, fontSize: 12 }}>{profile.profile.hobby}</span>}
-                            {profile.profile.music && <span style={{ padding: '4px 12px', background: 'rgba(255, 255, 255, 0.1)', color: '#ddd', borderRadius: 8, fontSize: 12 }}>{profile.profile.music}</span>}
-                            {profile.profile.weekend && <span style={{ padding: '4px 12px', background: 'rgba(255, 255, 255, 0.1)', color: '#ddd', borderRadius: 8, fontSize: 12 }}>{profile.profile.weekend}</span>}
-                        </div>
-
-                        {profile.matchHighlights && profile.matchHighlights.length > 0 && (
-                            <div style={{ marginTop: 24, padding: 16, background: 'rgba(236, 72, 153, 0.1)', borderRadius: 12, border: '1px solid rgba(236, 72, 153, 0.2)' }}>
-                                <h3 style={{ fontSize: 14, color: 'var(--accent-pink)', marginBottom: 8 }}>✨ Arayışlarınla Eşleşiyor</h3>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    {profile.matchHighlights.map((h: string, i: number) => (
-                                        <span key={i} style={{ fontSize: 13, color: 'white' }}>{h}</span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
+                        {/* Horoscope Component */}
                         <ProfileHoroscope dailyHoroscope={profile.dailyHoroscope} />
                     </>
                 )}
 
+                {/* Photo Gallery */}
                 <ProfileGallery
                     isOwner={isOwner}
                     photos={profile.profile.photos}
@@ -398,7 +481,22 @@ const Profile = () => {
                     deleteGalleryPhoto={deleteGalleryPhoto}
                 />
             </div>
-        </motion.div>
+
+            {/* Income Modal */}
+            <AnimatePresence>
+                {showIncome && (
+                    <motion.div
+                        initial={{ opacity: 0, y: '100%' }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: '100%' }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className="fixed inset-0 z-[9999]"
+                    >
+                        <Income onClose={() => setShowIncome(false)} />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };
 export default Profile;

@@ -1,3 +1,4 @@
+import './config/env';
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -5,7 +6,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.routes';
 import horoscopeRoutes from './routes/horoscope.routes';
@@ -19,24 +19,20 @@ import giftRoutes from './routes/gift.routes';
 import tarotRoutes from './routes/tarot.routes';
 import adminRoutes from './routes/admin.routes';
 import questRoutes from './routes/quest.routes';
+
 import { setupSocket } from './controllers/socket.controller';
 import { startHoroscopeCron } from './services/horoscope.cron';
-
-dotenv.config();
-
 import { logger } from './utils/logger';
 
 // --- SAFETY NETS (Yakalanmayan Hatalar) ---
 process.on('uncaughtException', (err: any) => {
-    console.error(`[UNCAUGHT EXCEPTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, err.stack);
-    logger.error(`[UNCAUGHT EXCEPTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, { stack: err.stack });
-    process.exit(1);
+    console.error(`[UNCAUGHT EXCEPTION] ${err.name}: ${err.message}`, err.stack);
+    logger.error(`[UNCAUGHT EXCEPTION] ${err.name}: ${err.message}`, { stack: err.stack });
 });
 
 process.on('unhandledRejection', (err: any) => {
-    console.error(`[UNHANDLED REJECTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, err.stack);
-    logger.error(`[UNHANDLED REJECTION] Sunucu kapanıyor! ${err.name}: ${err.message}`, { stack: err.stack });
-    process.exit(1);
+    console.error(`[UNHANDLED REJECTION] ${err.name}: ${err.message}`, err.stack);
+    logger.error(`[UNHANDLED REJECTION] ${err.name}: ${err.message}`, { stack: err.stack });
 });
 // ------------------------------------------
 
@@ -52,6 +48,7 @@ const allowedOrigins = process.env.NODE_ENV === 'production' ? [
     process.env.FRONTEND_URL || 'http://localhost:5173',
     'http://localhost:8080',
     'http://localhost:8081',
+    'http://localhost:3005',
     'capacitor://localhost',
     'http://localhost',
 ];
@@ -62,7 +59,9 @@ const io = new Server(httpServer, {
     },
 });
 
-export const prisma = new PrismaClient();
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+export const prisma = globalForPrisma.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 // Restrict CORS to specific frontend domains (uses allowedOrigins defined above)
 app.use(cors({
@@ -86,7 +85,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // limit each IP to 500 requests per windowMs
+    max: process.env.NODE_ENV === 'production' ? 500 : 10000, // QA için 10.000 limit
     message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
@@ -97,6 +96,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 import notificationRoutes from './routes/notification.routes';
 import revenuecatRoutes from './routes/revenuecat.routes';
+import partyRoutes from './routes/party.routes';
 
 // ... Middleware imports remain correctly configured above
 
@@ -113,6 +113,8 @@ app.use('/api/tarot', tarotRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notification', notificationRoutes);
 app.use('/api/quests', questRoutes);
+app.use('/api/party', partyRoutes);
+
 app.use('/api/revenuecat', revenuecatRoutes);
 
 import { globalErrorHandler } from './middlewares/errorHandler';

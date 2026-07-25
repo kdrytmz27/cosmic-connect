@@ -467,6 +467,19 @@ export const addTellerComment = async (req: Request, res: Response) => {
         if (!tellerId || !comment?.trim()) { res.status(400).json({ error: 'Missing fields' }); return; }
         if (comment.length > 500) { res.status(400).json({ error: 'Comment too long (max 500 characters)' }); return; }
 
+        // VULN 70 FIX: Sadece fal baktıranlar yorum yapabilir (Spam Koruması)
+        const hasCompletedAppointment = await prisma.appointment.findFirst({
+            where: {
+                userId,
+                tellerId: String(tellerId),
+                status: 'COMPLETED'
+            }
+        });
+
+        if (!hasCompletedAppointment) {
+            return res.status(403).json({ error: 'Sadece fal baktırdığınız falcılara yorum yapabilirsiniz.' });
+        }
+
         const created = await prisma.tellerComment.create({
             data: { tellerId: String(tellerId), userId, comment: String(comment).trim() },
             include: { user: { select: { name: true, avatar: true } } }

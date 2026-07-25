@@ -41,6 +41,8 @@ const Messages = () => {
     const [activeChat, setActiveChat] = useState<IFriend | null>(null);
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
     const [messages, setMessages] = useState<IMessage[]>([]);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [groupMessages, setGroupMessages] = useState<IGroupMessage[]>([]);
     const [requests, setRequests] = useState<IFriendRequest[]>([]);
     const [friendReqRemaining, setFriendReqRemaining] = useState<number>(0);
@@ -83,12 +85,16 @@ const Messages = () => {
         if (activeChat) {
             api.get(`/user/messages/${activeChat.id}`).then(res => {
                 setMessages(res.data.messages || []);
+                setNextCursor(res.data.nextCursor || null);
                 scrollToBottom();
             });
             api.get(`/user/friend-request-status/${activeChat.id}`).then(res => {
                 setFriendStatus(res.data.status);
                 setFriendReqRemaining(res.data.remaining);
             }).catch(() => setFriendStatus('none'));
+
+            // Reset unread count for the active chat
+            setFriends(prev => prev.map(f => f.id === activeChat.id ? { ...f, unreadCount: 0 } : f));
         } else {
             setFriendStatus(null);
         }
@@ -159,7 +165,8 @@ const Messages = () => {
             }
             setFriends(prev => prev.map(f => f.id === msg.senderId ? {
                 ...f,
-                lastMessage: { content: msg.content, senderId: msg.senderId, createdAt: new Date(msg.timestamp).toISOString() }
+                lastMessage: { content: msg.content, senderId: msg.senderId, createdAt: new Date(msg.timestamp).toISOString() },
+                unreadCount: (activeChat && activeChat.id === msg.senderId) ? 0 : ((f.unreadCount || 0) + 1)
             } : f));
         };
 
@@ -279,6 +286,20 @@ const Messages = () => {
         }, 100);
     };
 
+    const loadMoreMessages = async () => {
+        if (!activeChat || !nextCursor || loadingMore) return;
+        setLoadingMore(true);
+        try {
+            const res = await api.get(`/user/messages/${activeChat.id}?cursor=${nextCursor}&limit=50`);
+            setMessages(prev => [...(res.data.messages || []), ...prev]);
+            setNextCursor(res.data.nextCursor || null);
+        } catch (err) {
+            console.error('Eski mesajlar yüklenemedi', err);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
     const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setMessageInput(e.target.value);
         if (!activeChat) return;
@@ -391,6 +412,9 @@ const Messages = () => {
                 handleExtendMatch={handleExtendMatch}
                 messagesEndRef={messagesEndRef}
                 updateEconomy={updateEconomy}
+                loadMoreMessages={loadMoreMessages}
+                nextCursor={nextCursor}
+                loadingMore={loadingMore}
             />
         );
     }

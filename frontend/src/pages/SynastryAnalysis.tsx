@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api, { BACKEND_URL } from '../api/client';
 import { SynastryChart } from '../components/SynastryChart';
+import { BrandLoader } from '../components/BrandLoader';
+import { useAuth } from '../context/AuthContext';
 
 const ZODIAC_TR: Record<string, string> = {
     'Aries': 'Koç', 'Taurus': 'Boğa', 'Gemini': 'İkizler', 'Cancer': 'Yengeç',
@@ -16,18 +17,12 @@ const PLANET_TR: Record<string, string> = {
     'Venus': 'Venüs', 'Mars': 'Mars', 'Jupiter': 'Jüpiter', 'Saturn': 'Satürn'
 };
 
-const ASPECT_COLOR: Record<string, string> = {
-    'harmonious': '#22c55e',
-    'challenging': '#ef4444',
-    'neutral': '#fbbf24'
-};
-
 const ASPECT_ICON: Record<string, string> = {
-    'conjunction': '☌',
-    'sextile': '⚹',
-    'square': '□',
-    'trine': '△',
-    'opposition': '☍'
+    'conjunction': 'radio_button_unchecked',
+    'sextile': 'star_half',
+    'square': 'crop_square',
+    'trine': 'change_history',
+    'opposition': 'compare_arrows'
 };
 
 const SynastryAnalysis = () => {
@@ -35,7 +30,30 @@ const SynastryAnalysis = () => {
     const navigate = useNavigate();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [activeSection, setActiveSection] = useState<'chart' | 'categories' | 'aspects'>('chart');
+    const [activeTab, setActiveTab] = useState<'chart' | 'categories' | 'aspects'>('chart');
+    const { isPremium } = useAuth();
+    const [isLimitReached, setIsLimitReached] = useState(false);
+
+    useEffect(() => {
+        if (!isPremium && id) {
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const cacheKey = `synastry_history_${today}`;
+                const history = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+                
+                if (!history.includes(id)) {
+                    if (history.length >= 1) {
+                        setIsLimitReached(true);
+                    } else {
+                        history.push(id);
+                        localStorage.setItem(cacheKey, JSON.stringify(history));
+                    }
+                }
+            } catch (err) {
+                console.error("Localstorage limit check error", err);
+            }
+        }
+    }, [isPremium, id]);
 
     useEffect(() => {
         if (id) {
@@ -47,24 +65,17 @@ const SynastryAnalysis = () => {
     }, [id]);
 
     if (loading) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
-                <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                >
-                    <Sparkles size={40} color="var(--accent-gold)" />
-                </motion.div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Synastri haritanız hesaplanıyor...</p>
-            </div>
-        );
+        return <BrandLoader message="Synastri haritanız hesaplanıyor..." />;
     }
 
-    if (!data) {
+    if (!data || !data.report || !data.user1 || !data.user2) {
         return (
-            <div style={{ padding: 24, textAlign: 'center' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>Synastri verisi bulunamadı.</p>
-                <button onClick={() => navigate(-1)} style={{ marginTop: 16, padding: '8px 24px', borderRadius: 12, background: 'var(--accent-purple)', color: 'white', border: 'none', cursor: 'pointer' }}>
+            <div className="w-full flex flex-col items-center justify-center py-20 gap-4">
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-3xl text-on-surface-variant">error_outline</span>
+                </div>
+                <p className="font-body-md text-on-surface-variant">Synastri verisi bulunamadı veya henüz hazır değil.</p>
+                <button onClick={() => navigate(-1)} className="bg-primary-container text-on-primary-container font-label-md px-6 py-2 rounded-full hover:bg-inverse-primary transition-colors">
                     Geri Dön
                 </button>
             </div>
@@ -72,252 +83,267 @@ const SynastryAnalysis = () => {
     }
 
     const { report, user1, user2 } = data;
-    const scoreColor = report.overallScore >= 75 ? '#22c55e' : report.overallScore >= 50 ? '#fbbf24' : '#ef4444';
+    const score = report.overallScore || 0;
+    const scoreColor = score >= 75 ? 'text-tertiary' : score >= 50 ? 'text-secondary' : 'text-error';
+    const scoreHex = score >= 75 ? '#3cddc7' : score >= 50 ? '#ffc640' : '#ffb4ab';
+
+    const tabs = [
+        { key: 'chart' as const, label: 'Harita' },
+        { key: 'categories' as const, label: 'Kategoriler' },
+        { key: 'aspects' as const, label: 'Açılar' }
+    ];
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ padding: 16, paddingBottom: 100, maxWidth: 600, margin: '0 auto' }}
-        >
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                <button onClick={() => navigate(-1)} style={{ background: 'var(--card-border)', padding: 8, borderRadius: '50%', border: 'none', cursor: 'pointer', color: 'white' }}>
-                    <ArrowLeft size={20} />
-                </button>
-                <h1 className="glow-text" style={{ fontSize: 24 }}>Synastri Analizi</h1>
-            </div>
+        <div className="w-full max-w-4xl mx-auto flex flex-col gap-10 pb-8 relative">
+            
+            {isLimitReached && (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#050510]/80 backdrop-blur-xl rounded-3xl p-8 text-center border border-[var(--accent-gold)] mt-20" style={{ height: 'max-content', paddingBottom: '100px' }}>
+                    <div className="w-20 h-20 bg-[var(--accent-gold)]/20 rounded-full flex items-center justify-center mb-6">
+                        <span className="material-symbols-outlined text-5xl text-[var(--accent-gold)]">workspace_premium</span>
+                    </div>
+                    <h2 className="text-3xl font-extrabold text-white mb-4">Günlük Analiz Limitine Ulaştınız</h2>
+                    <p className="text-[var(--text-secondary)] mb-8 max-w-md">
+                        Standart kullanıcılar günde 1 kez harita uyum analizi yapabilir. Kozmik VIP ayrıcalıklarına geçerek istediğiniz kadar kişiyle sınırsız analiz yapabilirsiniz.
+                    </p>
+                    <button onClick={() => navigate('/vip')} className="w-full md:w-auto px-10 py-4 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-pink)] text-black font-extrabold text-lg shadow-[0_0_20px_rgba(255,215,0,0.4)] hover:shadow-[0_0_30px_rgba(255,215,0,0.6)] transition-all">
+                        Kozmik VIP Ol
+                    </button>
+                    <button onClick={() => navigate(-1)} className="mt-6 font-bold text-white/50 hover:text-white transition-colors">
+                        Geri Dön
+                    </button>
+                </div>
+            )}
 
-            {/* Users comparison header */}
-            <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="glass-panel"
-                style={{ padding: 24, textAlign: 'center', marginBottom: 20 }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 16 }}>
-                    {/* User 1 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', border: '2px solid #ec4899' }}>
-                            <img
-                                src={user1.avatar ? `${BACKEND_URL}${user1.avatar}` : `https://ui-avatars.com/api/?name=${user1.name}&background=random`}
-                                alt={user1.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                        </div>
-                        <span style={{ fontSize: 13, color: '#ec4899', fontWeight: 600, textTransform: 'capitalize' }}>{user1.name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{ZODIAC_TR[user1.sunSign] || user1.sunSign}</span>
+            <div className={`flex flex-col gap-10 transition-all w-full ${isLimitReached ? 'blur-xl opacity-40 pointer-events-none' : ''}`}>
+            
+            {/* Synastry Header & Visuals */}
+            <section className="flex flex-col items-center justify-center relative">
+                <div className="text-center mb-10">
+                    <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-2">Burç Uyumu</h2>
+                    <p className="font-body-md text-body-md text-on-surface-variant">Synastry Analizi</p>
+                </div>
+
+                <div className="flex items-center justify-center gap-4 w-full relative">
+                    {/* User 1 Avatar */}
+                    <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-primary-container z-10 shadow-[0_0_20px_rgba(147,51,234,0.4)]">
+                        <img 
+                            className="w-full h-full object-cover" 
+                            src={user1.avatar ? (user1.avatar.startsWith('http') ? user1.avatar : `${BACKEND_URL}${user1.avatar}`) : `https://ui-avatars.com/api/?name=${user1.name}&background=9333ea&color=fff&bold=true`} 
+                            alt={user1.name} 
+                        />
                     </div>
 
-                    {/* Overall score */}
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', delay: 0.3 }}
-                        style={{
-                            width: 80, height: 80, borderRadius: '50%',
-                            background: `conic-gradient(${scoreColor} ${report.overallScore * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            position: 'relative'
-                        }}
-                    >
-                        <div style={{
-                            width: 64, height: 64, borderRadius: '50%',
-                            background: 'var(--bg-color)', display: 'flex',
-                            flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            <span style={{ fontSize: 22, fontWeight: 'bold', color: scoreColor }}>{report.overallScore}</span>
-                            <span style={{ fontSize: 8, color: 'var(--text-secondary)' }}>UYUMLULUK</span>
+                    {/* Circular Progress (Uyum Oranı) */}
+                    <div className="z-20 -mx-6 md:-mx-8">
+                        <div 
+                            className="relative w-[120px] h-[120px] rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(255,198,64,0.3)]"
+                            style={{ background: `conic-gradient(${scoreHex} ${score * 3.6}deg, rgba(255,255,255,0.1) 0deg)` }}
+                        >
+                            <div className="absolute w-[104px] h-[104px] rounded-full bg-background"></div>
+                            <div className="relative z-10 flex flex-col items-center justify-center">
+                                <span className={`font-headline-lg text-headline-lg ${scoreColor}`}>%{score}</span>
+                                <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Uyum</span>
+                            </div>
                         </div>
-                    </motion.div>
+                    </div>
 
-                    {/* User 2 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', border: '2px solid #fbbf24' }}>
-                            <img
-                                src={user2.avatar ? `${BACKEND_URL}${user2.avatar}` : `https://ui-avatars.com/api/?name=${user2.name}&background=random`}
-                                alt={user2.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                        </div>
-                        <span style={{ fontSize: 13, color: '#fbbf24', fontWeight: 600, textTransform: 'capitalize' }}>{user2.name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{ZODIAC_TR[user2.sunSign] || user2.sunSign}</span>
+                    {/* User 2 Avatar */}
+                    <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-secondary z-10 shadow-[0_0_20px_rgba(255,198,64,0.4)]">
+                        <img 
+                            className="w-full h-full object-cover" 
+                            src={user2.avatar ? (user2.avatar.startsWith('http') ? user2.avatar : `${BACKEND_URL}${user2.avatar}`) : `https://ui-avatars.com/api/?name=${user2.name}&background=e3aa00&color=fff&bold=true`} 
+                            alt={user2.name} 
+                        />
+                    </div>
+
+                    {/* Decorative Connection Line */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-1 bg-gradient-to-r from-primary-container via-secondary to-primary-container opacity-30 blur-sm rounded-full -z-10"></div>
+                </div>
+
+                {/* Names under avatars */}
+                <div className="flex items-center justify-between w-full max-w-sm mt-4">
+                    <div className="flex flex-col items-center flex-1">
+                        <span className="font-label-md text-primary capitalize truncate max-w-[100px]">{user1.name}</span>
+                        <span className="font-label-sm text-label-sm text-on-surface-variant">{ZODIAC_TR[user1.sunSign] || user1.sunSign}</span>
+                    </div>
+                    <div className="flex-1"></div>
+                    <div className="flex flex-col items-center flex-1">
+                        <span className="font-label-md text-secondary capitalize truncate max-w-[100px]">{user2.name}</span>
+                        <span className="font-label-sm text-label-sm text-on-surface-variant">{ZODIAC_TR[user2.sunSign] || user2.sunSign}</span>
                     </div>
                 </div>
 
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{report.summary}</p>
-            </motion.div>
+                <div className="mt-8 text-center max-w-md">
+                    <p className="font-body-md text-body-md text-on-surface">{report.summary}</p>
+                </div>
+            </section>
 
-            {/* Tab navigation */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 8 }}>
-                {[
-                    { key: 'chart' as const, label: '🌌 Harita' },
-                    { key: 'categories' as const, label: '📊 Kategoriler' },
-                    { key: 'aspects' as const, label: '🔗 Açılar' }
-                ].map(tab => (
-                    <button
+            {/* Tabs */}
+            <div className="flex justify-between items-center border-b border-white/10 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-2">
+                {tabs.map(tab => (
+                    <button 
                         key={tab.key}
-                        onClick={() => setActiveSection(tab.key)}
-                        style={{
-                            flex: 1, padding: '10px 8px', border: 'none', background: 'transparent',
-                            cursor: 'pointer', fontSize: 13, fontWeight: activeSection === tab.key ? 'bold' : 'normal',
-                            color: activeSection === tab.key ? 'white' : 'var(--text-secondary)',
-                            borderBottom: activeSection === tab.key ? '2px solid var(--accent-pink)' : '2px solid transparent',
-                            transition: 'all 0.2s'
-                        }}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`font-label-md text-label-md py-2 px-4 flex-1 text-center transition-all rounded-lg relative ${
+                            activeTab === tab.key 
+                            ? 'text-primary bg-white/5' 
+                            : 'text-on-surface-variant hover:text-on-surface'
+                        }`}
                     >
                         {tab.label}
+                        {activeTab === tab.key && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-full"></div>}
                     </button>
                 ))}
             </div>
 
+            {/* Tab Content */}
             <AnimatePresence mode="wait">
                 {/* Chart Tab */}
-                {activeSection === 'chart' && (
-                    <motion.div
+                {activeTab === 'chart' && (
+                    <motion.section
                         key="chart"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        className="glass-panel"
-                        style={{ padding: 24, marginBottom: 20 }}
+                        className="flex flex-col gap-10 w-full"
                     >
-                        <h3 style={{ fontSize: 16, color: 'white', marginBottom: 4, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                            <Sparkles size={16} color="var(--accent-gold)" /> Synastri Çarkı
-                        </h3>
-                        <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 20 }}>
-                            İki haritanın gezegen konumları
-                        </p>
-                        <SynastryChart
-                            user1Planets={report.user1Planets}
-                            user2Planets={report.user2Planets}
-                            user1Name={user1.name}
-                            user2Name={user2.name}
-                        />
-
-                        {/* Planet positions table */}
-                        <div style={{ marginTop: 24 }}>
-                            <h4 style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, textAlign: 'center' }}>Gezegen Konumları</h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                {/* User 1 */}
-                                <div style={{ background: 'rgba(236,72,153,0.08)', borderRadius: 12, padding: 12, border: '1px solid rgba(236,72,153,0.15)' }}>
-                                    <h5 style={{ fontSize: 12, color: '#ec4899', marginBottom: 8, textAlign: 'center', textTransform: 'capitalize' }}>{user1.name}</h5>
-                                    {report.user1Planets.map((p: any) => (
-                                        <div key={p.planet} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-secondary)', padding: '3px 0' }}>
-                                            <span>{PLANET_TR[p.planet]}</span>
-                                            <span style={{ color: 'white', fontWeight: 500 }}>{ZODIAC_TR[p.sign]} {Math.round(p.degree)}°</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                {/* User 2 */}
-                                <div style={{ background: 'rgba(251,191,36,0.08)', borderRadius: 12, padding: 12, border: '1px solid rgba(251,191,36,0.15)' }}>
-                                    <h5 style={{ fontSize: 12, color: '#fbbf24', marginBottom: 8, textAlign: 'center', textTransform: 'capitalize' }}>{user2.name}</h5>
-                                    {report.user2Planets.map((p: any) => (
-                                        <div key={p.planet} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-secondary)', padding: '3px 0' }}>
-                                            <span>{PLANET_TR[p.planet]}</span>
-                                            <span style={{ color: 'white', fontWeight: 500 }}>{ZODIAC_TR[p.sign]} {Math.round(p.degree)}°</span>
-                                        </div>
-                                    ))}
-                                </div>
+                        {/* Synastry Wheel */}
+                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center w-full relative pt-8">
+                            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary-container/10 via-transparent to-transparent opacity-50 pointer-events-none rounded-2xl"></div>
+                            
+                            <div className="relative w-full max-w-[320px] md:max-w-[400px] aspect-square flex items-center justify-center z-10">
+                                <SynastryChart
+                                    user1Planets={report.user1Planets}
+                                    user2Planets={report.user2Planets}
+                                    user1Name={user1.name}
+                                    user2Name={user2.name}
+                                />
                             </div>
                         </div>
-                    </motion.div>
+
+                        {/* Chart Info Banner */}
+                        <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
+                            <span className="material-symbols-outlined text-primary shrink-0">info</span>
+                            <p className="font-body-sm text-on-surface-variant">
+                                <strong className="text-primary">İç çember sizi</strong>, <strong className="text-secondary">dış çember partnerinizi</strong> temsil eder. Gezegenlerin birbirine olan açıları potansiyel uyumunuzu belirler.
+                            </p>
+                        </div>
+
+                        {/* Planet positions table */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-primary-container/5 border border-primary-container/15 rounded-xl p-4">
+                                <h5 className="font-label-md text-primary mb-3 text-center capitalize">{user1.name}</h5>
+                                {report.user1Planets.map((p: any) => (
+                                    <div key={p.planet} className="flex justify-between items-center font-label-sm text-on-surface-variant py-1">
+                                        <span>{PLANET_TR[p.planet]}</span>
+                                        <span className="text-on-surface font-medium">{ZODIAC_TR[p.sign]} {Math.round(p.degree)}°</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="bg-secondary-container/5 border border-secondary-container/15 rounded-xl p-4">
+                                <h5 className="font-label-md text-secondary mb-3 text-center capitalize">{user2.name}</h5>
+                                {report.user2Planets.map((p: any) => (
+                                    <div key={p.planet} className="flex justify-between items-center font-label-sm text-on-surface-variant py-1">
+                                        <span>{PLANET_TR[p.planet]}</span>
+                                        <span className="text-on-surface font-medium">{ZODIAC_TR[p.sign]} {Math.round(p.degree)}°</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+
+                    </motion.section>
                 )}
 
                 {/* Categories Tab */}
-                {activeSection === 'categories' && (
-                    <motion.div
+                {activeTab === 'categories' && (
+                    <motion.section
                         key="categories"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                        className="flex flex-col gap-4 w-full"
                     >
                         {report.categories.map((cat: any, i: number) => {
-                            const catColor = cat.score >= 75 ? '#22c55e' : cat.score >= 50 ? '#fbbf24' : '#ef4444';
+                            const catColor = cat.score >= 75 ? '#3cddc7' : cat.score >= 50 ? '#ffc640' : '#ffb4ab';
                             return (
                                 <motion.div
                                     key={cat.nameEn}
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.1 }}
-                                    className="glass-panel"
-                                    style={{ padding: 20 }}
+                                    transition={{ delay: i * 0.08 }}
+                                    className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5"
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span style={{ fontSize: 24 }}>{cat.emoji}</span>
-                                            <h3 style={{ fontSize: 15, color: 'white', fontWeight: 600 }}>{cat.name}</h3>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-2xl">{cat.emoji}</span>
+                                            <h3 className="font-label-md text-on-surface">{cat.name}</h3>
                                         </div>
-                                        <span style={{ fontSize: 20, fontWeight: 'bold', color: catColor }}>{cat.score}</span>
+                                        <span className="font-headline-md text-headline-md" style={{ color: catColor }}>{cat.score}</span>
                                     </div>
-                                    <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
+                                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
                                         <motion.div
                                             initial={{ width: 0 }}
                                             animate={{ width: `${cat.score}%` }}
-                                            transition={{ duration: 1, delay: i * 0.1 + 0.3 }}
-                                            style={{ height: '100%', background: `linear-gradient(90deg, ${catColor}80, ${catColor})`, borderRadius: 3 }}
+                                            transition={{ duration: 1, delay: i * 0.08 + 0.3 }}
+                                            className="h-full rounded-full"
+                                            style={{ background: `linear-gradient(90deg, ${catColor}80, ${catColor})` }}
                                         />
                                     </div>
-                                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{cat.description}</p>
+                                    <p className="font-body-md text-body-md text-on-surface-variant">{cat.description}</p>
                                 </motion.div>
                             );
                         })}
-                    </motion.div>
+                    </motion.section>
                 )}
 
                 {/* Aspects Tab */}
-                {activeSection === 'aspects' && (
-                    <motion.div
+                {activeTab === 'aspects' && (
+                    <motion.section
                         key="aspects"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                        className="flex flex-col gap-3 w-full"
                     >
-                        <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 8 }}>
+                        <p className="font-label-sm text-label-sm text-on-surface-variant text-center mb-2">
                             Toplam {report.aspects.length} açı tespit edildi
                         </p>
                         {report.aspects.map((asp: any, i: number) => {
-                            const color = ASPECT_COLOR[asp.nature] || '#888';
+                            const isHarmonious = asp.nature === 'harmonious';
+                            const isChallenging = asp.nature === 'challenging';
+                            const color = isHarmonious ? '#3cddc7' : isChallenging ? '#ffb4ab' : '#ffc640';
+                            const label = isHarmonious ? 'Uyumlu' : isChallenging ? 'Zorlayıcı' : 'Nötr';
                             return (
                                 <motion.div
                                     key={`${asp.planet1}-${asp.planet2}-${asp.type}-${i}`}
                                     initial={{ opacity: 0, x: 10 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    className="glass-panel"
-                                    style={{ padding: 14, borderLeft: `3px solid ${color}` }}
+                                    transition={{ delay: i * 0.04 }}
+                                    className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4"
+                                    style={{ borderLeft: `3px solid ${color}` }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ fontSize: 16, color }}>{ASPECT_ICON[asp.type] || '●'}</span>
-                                            <span style={{ fontSize: 13, color: 'white', fontWeight: 600 }}>
-                                                {PLANET_TR[asp.planet1]} {ASPECT_ICON[asp.type]} {PLANET_TR[asp.planet2]}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[16px]" style={{ color }}>{ASPECT_ICON[asp.type] || 'circle'}</span>
+                                            <span className="font-label-md text-on-surface">
+                                                {PLANET_TR[asp.planet1]} — {PLANET_TR[asp.planet2]}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                                                {asp.angle}° (orb: {asp.orb}°)
-                                            </span>
-                                            <span style={{
-                                                fontSize: 10, padding: '2px 8px', borderRadius: 8,
-                                                background: `${color}20`, color: color, fontWeight: 'bold'
-                                            }}>
-                                                {asp.nature === 'harmonious' ? 'Uyumlu' : asp.nature === 'challenging' ? 'Zorlayıcı' : 'Nötr'}
-                                            </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-label-sm text-on-surface-variant">{asp.angle}°</span>
+                                            <span className="font-label-sm px-2 py-0.5 rounded-full" style={{ background: `${color}20`, color }}>{label}</span>
                                         </div>
                                     </div>
-                                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-                                        {asp.interpretation}
-                                    </p>
+                                    <p className="font-body-md text-body-md text-on-surface-variant">{asp.interpretation}</p>
                                 </motion.div>
                             );
                         })}
-                    </motion.div>
+                    </motion.section>
                 )}
             </AnimatePresence>
-        </motion.div>
+            </div>
+        </div>
     );
 };
 

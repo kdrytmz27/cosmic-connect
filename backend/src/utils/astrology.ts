@@ -70,37 +70,4 @@ export function calculateRisingSign(birthTime: string, sunSign: string): string 
     return ZODIAC_ORDER[risingIndex] || 'Unknown';
 }
 
-type Element = 'FIRE' | 'WATER' | 'EARTH' | 'AIR';
 
-export function getZodiacElement(sign: string): Element {
-    const fire = ['Aries', 'Leo', 'Sagittarius'];
-    const water = ['Cancer', 'Scorpio', 'Pisces'];
-    const earth = ['Taurus', 'Virgo', 'Capricorn'];
-    if (fire.includes(sign)) return 'FIRE';
-    if (water.includes(sign)) return 'WATER';
-    if (earth.includes(sign)) return 'EARTH';
-    return 'AIR';
-}
-
-export function calculateCompatibility(sign1: string, sign2: string) {
-    const e1 = getZodiacElement(sign1);
-    const e2 = getZodiacElement(sign2);
-
-    if (e1 === e2) return { score: 90, message: 'Aynı elementin mükemmel uyumu. Birbirinizi çok iyi anlıyorsunuz.' };
-
-    if ((e1 === 'FIRE' && e2 === 'AIR') || (e1 === 'AIR' && e2 === 'FIRE')) {
-        return { score: 85, message: 'Ateş ve Hava: Eğlenceli ve tutkulu bir ilişki potansiyeli.' };
-    }
-    if ((e1 === 'WATER' && e2 === 'EARTH') || (e1 === 'EARTH' && e2 === 'WATER')) {
-        return { score: 88, message: 'Su ve Toprak: Birbirinizi inanılmaz derecede dengeliyorsunuz.' };
-    }
-
-    if ((e1 === 'FIRE' && e2 === 'WATER') || (e1 === 'WATER' && e2 === 'FIRE')) {
-        return { score: 40, message: 'Ateş ve Su: Büyük bir tutku veya sönmeyen bir çatışma! Dengeyi bulmak zor olabilir.' };
-    }
-    if ((e1 === 'EARTH' && e2 === 'AIR') || (e1 === 'AIR' && e2 === 'EARTH')) {
-        return { score: 45, message: 'Toprak ve Hava: Pratiklik ile özgürlüğün kavgası. Birbirinizden öğrenecek çok şeyiniz var.' };
-    }
-
-    return { score: 65, message: 'Farklı dünyaların insanlarısınız ama farklılıklarınız yenilikçi bir köprü oluşturabilir.' };
-}

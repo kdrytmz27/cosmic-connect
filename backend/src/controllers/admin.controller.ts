@@ -63,7 +63,7 @@ export const updateUser = async (req: Request, res: Response) => {
 
         // Validate role against whitelist to prevent arbitrary role injection
         if (role !== undefined) {
-            const validRoles = [UserRole.STANDARD, UserRole.FORTUNE_TELLER, UserRole.ADMIN];
+            const validRoles = [UserRole.STANDARD, UserRole.FORTUNE_TELLER, UserRole.ADMIN, 'BANNED'];
             if (!validRoles.includes(role)) {
                 return res.status(400).json({ error: 'Invalid role value' });
             }

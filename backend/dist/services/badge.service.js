@@ -46,7 +46,7 @@ class BadgeService {
             });
             if (!user)
                 return [];
-            const existingBadges = JSON.parse(user.badges || '[]');
+            const existingBadges = Array.isArray(user.badges) ? user.badges : [];
             const newBadges = [...existingBadges];
             const awardedNow = [];
             // 1. Star Explorer (Level >= 5)
@@ -72,8 +72,8 @@ class BadgeService {
             }
             if (awardedNow.length > 0) {
                 const updatedCount = await index_1.prisma.user.updateMany({
-                    where: { id: userId, badges: user.badges },
-                    data: { badges: JSON.stringify(newBadges) }
+                    where: { id: userId },
+                    data: { badges: newBadges }
                 });
                 // Başarılı ise çık ve rozetleri dön
                 if (updatedCount.count > 0) {

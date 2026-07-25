@@ -11,7 +11,7 @@ if (!secret) {
     throw new Error('FATAL ERROR: JWT_SECRET environment variable is missing.');
 }
 const JWT_SECRET = secret;
-const JWT_EXPIRES_IN = '7d';
+const JWT_EXPIRES_IN = '30d';
 function signToken(userId, role) {
     return jsonwebtoken_1.default.sign({ userId, role }, JWT_SECRET, {
         expiresIn: JWT_EXPIRES_IN

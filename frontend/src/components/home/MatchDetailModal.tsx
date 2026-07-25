@@ -1,25 +1,26 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Heart, Star, Loader, UserPlus } from 'lucide-react';
+import { X, Sparkles, Heart, Star, Loader } from 'lucide-react';
 import { BACKEND_URL } from '../../api/client';
+import { translateZodiac } from '../../utils/zodiac';
 
 interface MatchDetailModalProps {
     selectedUser: any;
-    setSelectedUser: (user: any | null) => void;
+    onClose: () => void;
     user: any;
     actionLoading: boolean;
-    sendSuperLike: (id: string) => void;
-    handleSendFriendRequest: (id: string) => void;
+    onSuperLike: (id: string) => void;
+    onLike: (id: string) => void;
     navigate: (path: string) => void;
 }
 
 export const MatchDetailModal = ({
     selectedUser,
-    setSelectedUser,
+    onClose,
     user,
     actionLoading,
-    sendSuperLike,
-    handleSendFriendRequest,
+    onSuperLike,
+    onLike,
     navigate
 }: MatchDetailModalProps) => {
     const [showDetailedCompatibility, setShowDetailedCompatibility] = useState(false);
@@ -47,7 +48,7 @@ export const MatchDetailModal = ({
                 background: 'rgba(10, 5, 20, 0.92)',
                 zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24
             }}
-            onClick={() => { setSelectedUser(null); setShowDetailedCompatibility(false); }}
+            onClick={() => { onClose(); setShowDetailedCompatibility(false); }}
         >
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -58,7 +59,7 @@ export const MatchDetailModal = ({
                 onClick={e => e.stopPropagation()}
             >
                 <button
-                    onClick={() => setSelectedUser(null)}
+                    onClick={() => onClose()}
                     style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer' }}
                 >
                     <X size={18} />
@@ -69,7 +70,7 @@ export const MatchDetailModal = ({
                     style={{ width: 100, height: 100, margin: '0 auto 16px', borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--accent-purple)', padding: 2, cursor: 'pointer' }}
                 >
                     <img
-                        src={selectedUser.match.avatar ? `${BACKEND_URL}${selectedUser.match.avatar}` : `https://ui-avatars.com/api/?name=${selectedUser.match.name || selectedUser.match.email?.split('@')[0] || 'G'}&background=random`}
+                        src={selectedUser.match.avatar ? (selectedUser.match.avatar.startsWith('http') ? selectedUser.match.avatar : `${BACKEND_URL}${selectedUser.match.avatar}`) : `https://ui-avatars.com/api/?name=${selectedUser.match.name || selectedUser.match.email?.split('@')[0] || 'G'}&background=random`}
                         alt="Avatar"
                         style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
                     />
@@ -84,11 +85,11 @@ export const MatchDetailModal = ({
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
-                    <span style={{ padding: '4px 12px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Güneş: {selectedUser.match.sunSign}</span>
-                    <span style={{ padding: '4px 12px', background: 'rgba(139, 92, 246, 0.2)', color: '#a855f7', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Ay: {selectedUser.match.moonSign || '?'}</span>
+                    <span style={{ padding: '4px 12px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Güneş: {translateZodiac(selectedUser.match.sunSign)}</span>
+                    <span style={{ padding: '4px 12px', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Ay: {translateZodiac(selectedUser.match.moonSign)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 24 }}>
-                    <span style={{ padding: '4px 12px', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Yükselen: {selectedUser.match.risingSign || '?'}</span>
+                    <span style={{ padding: '4px 12px', background: 'rgba(168, 85, 247, 0.2)', color: '#a855f7', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>Yükselen: {translateZodiac(selectedUser.match.risingSign)}</span>
                 </div>
 
                 {selectedUser.match.karma !== undefined && (
@@ -143,7 +144,7 @@ export const MatchDetailModal = ({
                     </AnimatePresence>
 
                     <button
-                        onClick={() => { setSelectedUser(null); navigate(`/synastry/${selectedUser.match.id}`); }}
+                        onClick={() => { onClose(); navigate(`/synastry/${selectedUser.match.id}`); }}
                         style={{ width: '100%', padding: '10px', marginTop: 16, borderRadius: 10, background: 'rgba(255,215,0,0.15)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', transition: 'all 0.2s' }}
                     >
                         <Star size={16} fill="var(--accent-gold)" /> Tüm Astromatik Haritayı Gör
@@ -153,7 +154,7 @@ export const MatchDetailModal = ({
                 {selectedUser.dailyHoroscope && (
                     <div style={{ textAlign: 'left', background: 'rgba(139, 92, 246, 0.1)', padding: 16, borderRadius: 12, border: '1px solid rgba(139, 92, 246, 0.3)', marginBottom: 24 }}>
                         <h3 style={{ color: 'var(--accent-purple)', fontSize: 16, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Star size={16} color="var(--accent-gold)" /> Günlük Fal ({selectedUser.match.sunSign})
+                            <Star size={16} color="var(--accent-gold)" /> Günlük Fal ({translateZodiac(selectedUser.match.sunSign)})
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             {selectedUser.dailyHoroscope['GENERAL'] && (
@@ -177,23 +178,23 @@ export const MatchDetailModal = ({
 
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                     <button
-                        onClick={() => handleSendFriendRequest(selectedUser.match.id)}
+                        onClick={() => onLike(selectedUser.match.id)}
                         disabled={actionLoading}
                         style={{
                             flex: 1, padding: '10px 12px', borderRadius: 12,
-                            background: 'rgba(56,189,248,0.12)',
-                            border: '1px solid rgba(56,189,248,0.25)',
-                            color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                            background: 'rgba(236,72,153,0.12)',
+                            border: '1px solid rgba(236,72,153,0.25)',
+                            color: 'var(--accent-pink)', cursor: 'pointer', fontWeight: 600, fontSize: 12,
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                             transition: 'all 0.2s'
                         }}
                     >
-                        <UserPlus size={14} color="#38bdf8" />
-                        Arkadaş Ekle
+                        <Heart size={14} color="var(--accent-pink)" />
+                        Beğen
                     </button>
 
                     <button
-                        onClick={() => sendSuperLike(selectedUser.match.id)}
+                        onClick={() => onSuperLike(selectedUser.match.id)}
                         disabled={actionLoading}
                         style={{
                             flex: 1, padding: '10px 12px', borderRadius: 12,

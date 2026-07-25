@@ -3,11 +3,19 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { BACKEND_URL } from '../api/client';
 
+interface ActivePartyRoom {
+    id: string;
+    title: string;
+    ownerAvatar?: string;
+}
+
 interface SocketContextType {
     socket: Socket | null;
     isConnected: boolean;
     unreadCount: number;
     setUnreadCount: React.Dispatch<React.SetStateAction<number>>;
+    activePartyRoom: ActivePartyRoom | null;
+    setActivePartyRoom: React.Dispatch<React.SetStateAction<ActivePartyRoom | null>>;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -15,6 +23,8 @@ const SocketContext = createContext<SocketContextType>({
     isConnected: false,
     unreadCount: 0,
     setUnreadCount: () => { },
+    activePartyRoom: null,
+    setActivePartyRoom: () => { },
 });
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
@@ -22,14 +32,15 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [activePartyRoom, setActivePartyRoom] = useState<ActivePartyRoom | null>(null);
 
     useEffect(() => {
         if (!token) {
-            if (socket) {
-                socket.disconnect();
-                setSocket(null);
-                setIsConnected(false);
-            }
+            setSocket(prev => {
+                if (prev) prev.disconnect();
+                return null;
+            });
+            setIsConnected(false);
             return;
         }
 
@@ -69,7 +80,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     }, [socket]);
 
     return (
-        <SocketContext.Provider value={{ socket, isConnected, unreadCount, setUnreadCount }}>
+        <SocketContext.Provider value={{ socket, isConnected, unreadCount, setUnreadCount, activePartyRoom, setActivePartyRoom }}>
             {children}
         </SocketContext.Provider>
     );

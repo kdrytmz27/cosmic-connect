@@ -1,6 +1,7 @@
-import { Loader, Camera, Check, X, Crown } from 'lucide-react';
+import { Camera, Check, X, Crown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { BACKEND_URL } from '../../api/client';
+import { translateZodiac } from '../../utils/zodiac';
 
 interface ProfileHeaderProps {
     isOwner: boolean;
@@ -28,102 +29,153 @@ export const ProfileHeader = ({
     handleSave, saving, uploadingAvatar, handleAvatarUpload
 }: ProfileHeaderProps) => {
     return (
-        <motion.div initial={{ y: 20 }} animate={{ y: 0 }} className="glass-panel" style={{ padding: 32, textAlign: 'center', position: 'relative' }}>
-            <div style={{ position: 'relative', width: 120, height: 120, margin: '0 auto 16px' }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '3px solid var(--accent-purple)' }}>
+        <motion.div 
+            initial={{ y: 20, opacity: 0 }} 
+            animate={{ y: 0, opacity: 1 }} 
+            className="bg-white/5 backdrop-blur-md rounded-3xl p-8 border border-white/10 text-center relative overflow-hidden group shadow-xl"
+        >
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-primary/20 transition-colors duration-700"></div>
+            
+            <div className="relative w-32 h-32 mx-auto mb-6">
+                <div className="w-full h-full rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border-4 border-primary/50 shadow-[0_0_20px_rgba(147,51,234,0.4)] relative z-10">
                     {uploadingAvatar ? (
-                        <Loader className="animate-spin text-accent" size={32} />
+                        <div className="flex flex-col items-center justify-center text-primary gap-2">
+                            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            <span className="font-label-sm text-[10px]">Yükleniyor</span>
+                        </div>
                     ) : (
-                        <img src={profile.profile.avatar ? `${BACKEND_URL}${profile.profile.avatar}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Kozmik')}&background=random&size=120`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img 
+                            src={profile.profile.avatar ? `${BACKEND_URL}${profile.profile.avatar}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Kozmik')}&background=ddb8ff&color=000&size=128`} 
+                            alt="Avatar" 
+                            className="w-full h-full object-cover" 
+                        />
                     )}
                 </div>
                 {isOwner && (
-                    <label style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--accent-pink)', padding: 8, borderRadius: '50%', cursor: 'pointer', border: '2px solid #1a1a1a', display: 'flex' }}>
-                        <Camera size={16} color="white" />
-                        <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} disabled={uploadingAvatar} />
+                    <label className="absolute bottom-0 right-0 bg-primary-container text-on-primary-container p-2.5 rounded-full cursor-pointer border-2 border-surface shadow-lg hover:scale-110 transition-transform z-20" title="Fotoğrafı Değiştir">
+                        <Camera size={18} />
+                        <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploadingAvatar} />
                     </label>
+                )}
+                {profile.profile.isPremium && (
+                    <div className="absolute -top-3 -right-3 z-30 drop-shadow-[0_0_15px_rgba(255,215,0,0.8)] rotate-[15deg]">
+                        <Crown size={40} className="text-[var(--accent-gold)] fill-[var(--accent-gold)]" />
+                    </div>
                 )}
             </div>
 
             {isEditing ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                <div className="flex flex-col gap-4 mb-4 max-w-md mx-auto relative z-10">
                     <input
                         type="text"
                         value={name}
                         onChange={e => setName(e.target.value)}
                         placeholder="İsim"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none' }}
+                        className="bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-md"
                     />
                     <textarea
                         value={bio}
                         onChange={e => setBio(e.target.value)}
                         placeholder="Kozmik enerjini anlat..."
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none', resize: 'none', height: 60 }}
+                        className="bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-md h-24 resize-none"
                     />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input
                             type="text"
                             value={hobby}
                             onChange={e => setHobby(e.target.value)}
-                            placeholder="İlgi alanların (örn: Doğa yürüyüşü, Resim)"
-                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none' }}
+                            placeholder="Hobin (örn: Sanat)"
+                            className="bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm"
                         />
                         <input
                             type="text"
                             value={music}
                             onChange={e => setMusic(e.target.value)}
-                            placeholder="Favori Müzik Türün (örn: Rock, Pop, Klasik)"
-                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none' }}
+                            placeholder="Müzik (örn: Pop)"
+                            className="bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm"
                         />
-                        <input
-                            type="text"
-                            value={weekend}
-                            onChange={e => setWeekend(e.target.value)}
-                            placeholder="Hafta Sonu Rutinin"
-                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none' }}
-                        />
-                        <select
-                            value={moonSign}
-                            onChange={e => setMoonSign(e.target.value)}
-                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none', appearance: 'none' }}
-                        >
-                            <option value="" disabled>Ay Burcunu Seç (Duygular)</option>
-                            <option value="Aries">Koç</option><option value="Taurus">Boğa</option><option value="Gemini">İkizler</option><option value="Cancer">Yengeç</option><option value="Leo">Aslan</option><option value="Virgo">Başak</option><option value="Libra">Terazi</option><option value="Scorpio">Akrep</option><option value="Sagittarius">Yay</option><option value="Capricorn">Oğlak</option><option value="Aquarius">Kova</option><option value="Pisces">Balık</option>
-                        </select>
-                        <select
-                            value={risingSign}
-                            onChange={e => setRisingSign(e.target.value)}
-                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: 'white', padding: '8px 12px', borderRadius: 8, outline: 'none', appearance: 'none' }}
-                        >
-                            <option value="" disabled>Yükselen Burcunu Seç (Dış Görünüş)</option>
-                            <option value="Aries">Koç</option><option value="Taurus">Boğa</option><option value="Gemini">İkizler</option><option value="Cancer">Yengeç</option><option value="Leo">Aslan</option><option value="Virgo">Başak</option><option value="Libra">Terazi</option><option value="Scorpio">Akrep</option><option value="Sagittarius">Yay</option><option value="Capricorn">Oğlak</option><option value="Aquarius">Kova</option><option value="Pisces">Balık</option>
-                        </select>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-                        <button onClick={() => setIsEditing(false)} style={{ padding: '6px 16px', borderRadius: 16, background: 'rgba(255,255,255,0.1)', color: 'white', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <X size={16} /> İptal
+                    
+                    <input
+                        type="text"
+                        value={weekend}
+                        onChange={e => setWeekend(e.target.value)}
+                        placeholder="Hafta sonu ne yaparsın?"
+                        className="bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm"
+                    />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="relative">
+                            <select
+                                value={moonSign}
+                                onChange={e => setMoonSign(e.target.value)}
+                                className="w-full bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm appearance-none"
+                            >
+                                <option value="" disabled>Ay Burcu</option>
+                                <option value="Aries">Koç</option><option value="Taurus">Boğa</option><option value="Gemini">İkizler</option><option value="Cancer">Yengeç</option><option value="Leo">Aslan</option><option value="Virgo">Başak</option><option value="Libra">Terazi</option><option value="Scorpio">Akrep</option><option value="Sagittarius">Yay</option><option value="Capricorn">Oğlak</option><option value="Aquarius">Kova</option><option value="Pisces">Balık</option>
+                            </select>
+                            <span className="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
+                        </div>
+                        <div className="relative">
+                            <select
+                                value={risingSign}
+                                onChange={e => setRisingSign(e.target.value)}
+                                className="w-full bg-surface-container-highest border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-primary transition-colors font-body-sm appearance-none"
+                            >
+                                <option value="" disabled>Yükselen</option>
+                                <option value="Aries">Koç</option><option value="Taurus">Boğa</option><option value="Gemini">İkizler</option><option value="Cancer">Yengeç</option><option value="Leo">Aslan</option><option value="Virgo">Başak</option><option value="Libra">Terazi</option><option value="Scorpio">Akrep</option><option value="Sagittarius">Yay</option><option value="Capricorn">Oğlak</option><option value="Aquarius">Kova</option><option value="Pisces">Balık</option>
+                            </select>
+                            <span className="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 justify-center mt-4">
+                        <button 
+                            onClick={() => setIsEditing(false)} 
+                            className="flex-1 py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-on-surface font-label-md flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"
+                        >
+                            <X size={18} /> İptal
                         </button>
-                        <button onClick={handleSave} disabled={saving} style={{ padding: '6px 16px', borderRadius: 16, background: 'var(--accent-purple)', color: 'white', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            {saving ? <Loader size={16} className="animate-spin" /> : <Check size={16} />} Kaydet
+                        <button 
+                            onClick={handleSave} 
+                            disabled={saving} 
+                            className="flex-1 py-3 px-6 rounded-xl bg-primary text-on-primary font-label-md font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(147,51,234,0.4)] hover:bg-inverse-primary transition-colors disabled:opacity-50"
+                        >
+                            {saving ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={18} />} Kaydet
                         </button>
                     </div>
                 </div>
             ) : (
-                <>
-                    <h2 style={{ marginBottom: 4, fontSize: 24, textTransform: 'capitalize', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <div className="relative z-10">
+                    <h2 className="font-headline-xl text-headline-xl text-on-surface mb-2 capitalize flex items-center justify-center gap-2">
                         {profile.profile.name || profile.profile.email?.split('@')[0] || 'Kozmik Yolcu'}
-                        {profile.profile.isPremium && <Crown size={20} color="var(--accent-gold)" />}
+                        {profile.profile.isPremium && <Crown size={24} className="text-secondary" />}
                     </h2>
+                    
                     {profile.profile.bio && (
-                        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12, padding: '0 16px', fontStyle: 'italic' }}>"{profile.profile.bio}"</p>
+                        <p className="font-body-md text-body-md text-on-surface-variant italic max-w-md mx-auto mb-6">
+                            "{profile.profile.bio}"
+                        </p>
                     )}
+                    
                     {(profile.profile.moonSign || profile.profile.risingSign) && (
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
-                            {profile.profile.moonSign && <div style={{ fontSize: 11, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 12 }}>🌙 Ay: {profile.profile.moonSign}</div>}
-                            {profile.profile.risingSign && <div style={{ fontSize: 11, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 12 }}>✨ Yükselen: {profile.profile.risingSign}</div>}
+                        <div className="flex justify-center gap-3 mb-2 flex-wrap">
+                            {profile.profile.moonSign && (
+                                <div className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[16px] text-primary">dark_mode</span>
+                                    <span className="font-label-sm text-label-sm text-primary">Ay: {translateZodiac(profile.profile.moonSign)}</span>
+                                </div>
+                            )}
+                            {profile.profile.risingSign && (
+                                <div className="px-3 py-1.5 rounded-full bg-secondary/10 border border-secondary/20 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[16px] text-secondary">flare</span>
+                                    <span className="font-label-sm text-label-sm text-secondary">Yükselen: {translateZodiac(profile.profile.risingSign)}</span>
+                                </div>
+                            )}
                         </div>
                     )}
-                </>
+                </div>
             )}
         </motion.div>
     );

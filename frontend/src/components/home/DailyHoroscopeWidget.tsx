@@ -6,10 +6,18 @@ interface DailyHoroscopeWidgetProps {
     dailyHoroscope: any;
 }
 
+const zodiacMap: Record<string, string> = {
+    'ARIES': 'Koç', 'TAURUS': 'Boğa', 'GEMINI': 'İkizler', 'CANCER': 'Yengeç',
+    'LEO': 'Aslan', 'VIRGO': 'Başak', 'LIBRA': 'Terazi', 'SCORPIO': 'Akrep',
+    'SAGITTARIUS': 'Yay', 'CAPRICORN': 'Oğlak', 'AQUARIUS': 'Kova', 'PISCES': 'Balık'
+};
+
 export const DailyHoroscopeWidget = ({ dailyHoroscope }: DailyHoroscopeWidgetProps) => {
     const [showHoroscope, setShowHoroscope] = useState(false);
 
     if (!dailyHoroscope) return null;
+
+    const translatedSign = zodiacMap[dailyHoroscope.sign?.toUpperCase()] || dailyHoroscope.sign;
 
     return (
         <div className="glass-panel" style={{ padding: 16, marginBottom: 20, border: '1px solid rgba(255, 215, 0, 0.3)', position: 'relative', overflow: 'hidden' }}>
@@ -25,7 +33,7 @@ export const DailyHoroscopeWidget = ({ dailyHoroscope }: DailyHoroscopeWidgetPro
                         <Star size={20} />
                     </div>
                     <div>
-                        <h3 style={{ fontSize: 15, color: 'var(--accent-gold)', marginBottom: 2 }}>Günün Falı ({dailyHoroscope.sign})</h3>
+                        <h3 style={{ fontSize: 15, color: 'var(--accent-gold)', marginBottom: 2 }}>Günün Falı ({translatedSign})</h3>
                         <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Yıldızlar bugün senin için ne diyor?</p>
                     </div>
                 </div>

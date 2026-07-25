@@ -159,13 +159,29 @@ export const friendshipService = {
             orderBy: { createdAt: 'desc' }
         });
 
-        // Build a map: friendId → most recent message
         const lastMessageMap = new Map<string, any>();
         for (const msg of lastMessagesRaw) {
             const friendId = msg.senderId === userId ? msg.receiverId : msg.senderId;
             if (!lastMessageMap.has(friendId)) {
                 lastMessageMap.set(friendId, msg); // First hit = most recent (ordered desc)
             }
+        }
+
+        // Phase 5: Calculate unread counts
+        const unreadCounts = await prisma.message.groupBy({
+            by: ['senderId'],
+            where: {
+                receiverId: userId,
+                senderId: { in: friendIds },
+                isRead: false
+            },
+            _count: {
+                _all: true
+            }
+        });
+        const unreadMap = new Map<string, number>();
+        for (const item of unreadCounts) {
+            unreadMap.set(item.senderId, item._count._all);
         }
 
         const friendsWithMessages = mutualFriends.map(f => {
@@ -176,13 +192,15 @@ export const friendshipService = {
             const isExpired = isTemporary && f.expiresAt! <= new Date();
             const isMatch = (f as any).status === 'SWIPE_MATCH' && !hasMessages;
             const matchType = (f as any).status;
-            const isBlurred = !hasMessages && ((!currentUser.isPremium && isMatch) || (isExpired && !currentUser.isPremium));
+            const isBlurred = !hasMessages && (!currentUser.isPremium && isMatch);
+
+            const unreadCount = unreadMap.get(f.user1.id) || 0;
 
             if (isBlurred && isMatch) {
                 return {
                     id: f.user1.id, name: null, avatar: null, sunSign: f.user1.sunSign,
                     isBlurred: true, isExpired: false, isTemporary, expiresAt: f.expiresAt ? f.expiresAt.toISOString() : null,
-                    isMatch: true, matchType, status: (f as any).status, hasMessages: false, lastMessage: null
+                    isMatch: true, matchType, status: (f as any).status, hasMessages: false, lastMessage: null, unreadCount: 0
                 };
             }
 
@@ -190,13 +208,13 @@ export const friendshipService = {
                 return {
                     id: f.user1.id, name: f.user1.name, avatar: f.user1.avatar, sunSign: f.user1.sunSign,
                     isBlurred: true, isExpired: true, isTemporary: true, isMatch: false, matchType,
-                    status: (f as any).status, hasMessages, lastMessage: lastMsg
+                    status: (f as any).status, hasMessages, lastMessage: lastMsg, unreadCount
                 };
             }
 
             return {
                 ...f.user1, isBlurred: false, isExpired, isTemporary, isMatch, matchType,
-                status: (f as any).status, hasMessages, expiresAt: f.expiresAt ? f.expiresAt.toISOString() : null, lastMessage: lastMsg
+                status: (f as any).status, hasMessages, expiresAt: f.expiresAt ? f.expiresAt.toISOString() : null, lastMessage: lastMsg, unreadCount
             };
         });
 
@@ -461,6 +479,20 @@ export const friendshipService = {
 
     getFriendRequestStatus: async (userId: string, targetId: string) => {
         console.log(`🔍 [getFriendRequestStatus] userId=${userId}, targetId=${targetId}`);
+        
+        // VULN 35 FIX: Prevent temporary matches from appearing as permanent friends
+        const matchRelation = await prisma.friendship.findFirst({
+            where: {
+                OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }],
+                status: 'MATCH'
+            }
+        });
+
+        if (matchRelation && matchRelation.expiresAt && new Date() < matchRelation.expiresAt) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: MATCH`);
+            return { status: 'MATCH' };
+        }
+
         const areFriends = await friendshipService.checkIfFriends(userId, targetId);
         if (areFriends) {
             console.log(`🔍 [getFriendRequestStatus] RETURNING: friends`);

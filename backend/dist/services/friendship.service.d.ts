@@ -9,11 +9,18 @@ export declare const friendshipService: {
     addFriend: (senderId: string, receiverId: string) => Promise<{
         message: string;
         matched: boolean;
-        isPremium: boolean | undefined;
+        permanent: boolean;
+        isPremium?: never;
     } | {
         message: string;
         matched: boolean;
+        permanent?: never;
         isPremium?: never;
+    } | {
+        message: string;
+        matched: boolean;
+        isPremium: boolean | undefined;
+        permanent?: never;
     }>;
     getFriends: (userId: string) => Promise<never[] | {
         friends: any[];
@@ -50,8 +57,8 @@ export declare const friendshipService: {
     }>;
     getPendingRequests: (userId: string) => Promise<({
         sender: {
-            id: string;
             name: string | null;
+            id: string;
             avatar: string | null;
             sunSign: string;
         };

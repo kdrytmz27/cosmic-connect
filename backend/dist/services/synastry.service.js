@@ -496,30 +496,6 @@ function calculateQuickSynastryScore(user1, user2) {
     const aspects = calculateAspects(u1Planets, u2Planets);
     const categories = calculateCategoryScores(aspects);
     let score = Math.round(categories.reduce((sum, c) => sum + c.score, 0) / categories.length);
-    // FEAT-09: Add flat bonuses if the user's manual big three have harmonious elements
-    // Fire: Aries, Leo, Sagittarius; Earth: Taurus, Virgo, Capricorn
-    // Air: Gemini, Libra, Aquarius; Water: Cancer, Scorpio, Pisces
-    const elements = {
-        'Aries': 'Fire', 'Leo': 'Fire', 'Sagittarius': 'Fire',
-        'Taurus': 'Earth', 'Virgo': 'Earth', 'Capricorn': 'Earth',
-        'Gemini': 'Air', 'Libra': 'Air', 'Aquarius': 'Air',
-        'Cancer': 'Water', 'Scorpio': 'Water', 'Pisces': 'Water'
-    };
-    const isHarmonious = (e1, e2) => {
-        if (e1 === e2)
-            return 10;
-        if ((e1 === 'Fire' && e2 === 'Air') || (e1 === 'Air' && e2 === 'Fire'))
-            return 8;
-        if ((e1 === 'Earth' && e2 === 'Water') || (e1 === 'Water' && e2 === 'Earth'))
-            return 8;
-        return 0;
-    };
-    if (user1.risingSign && user2.risingSign) {
-        score += isHarmonious(elements[user1.risingSign] || '', elements[user2.risingSign] || '');
-    }
-    if (user1.moonSign && user2.moonSign) {
-        score += isHarmonious(elements[user1.moonSign] || '', elements[user2.moonSign] || '');
-    }
     score = Math.min(100, score);
     let message;
     if (score >= 85)

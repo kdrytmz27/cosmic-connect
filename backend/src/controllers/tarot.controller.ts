@@ -1,4 +1,3 @@
-import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { majorArcana } from '../data/tarot';
 

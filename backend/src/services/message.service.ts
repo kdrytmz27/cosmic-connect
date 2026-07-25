@@ -3,7 +3,7 @@ import { getSocketIo } from '../controllers/socket.controller';
 import { notificationService } from './notification.service';
 
 export const messageService = {
-    getMessages: async (userId: string, friendId: string) => {
+    getMessages: async (userId: string, friendId: string, cursorId?: string, limit: number = 50) => {
         // ... omitting existing unchanged getMessages code ...
         // Security: Verify users have a relationship before allowing message access
         const friendship = await prisma.friendship.findFirst({
@@ -37,15 +37,41 @@ export const messageService = {
             throw new Error('Eşleşme süresi doldu');
         }
 
-        return await prisma.message.findMany({
+        // Phase 5: Gelen mesajları okundu olarak işaretle
+        await prisma.message.updateMany({
+            where: {
+                senderId: friendId,
+                receiverId: userId,
+                isRead: false
+            },
+            data: {
+                isRead: true
+            }
+        });
+
+        const messages = await prisma.message.findMany({
             where: {
                 OR: [
                     { senderId: userId, receiverId: friendId },
                     { senderId: friendId, receiverId: userId }
                 ]
             },
-            orderBy: { createdAt: 'asc' }
+            take: limit + 1,
+            skip: cursorId ? 1 : 0,
+            ...(cursorId ? { cursor: { id: cursorId } } : {}),
+            orderBy: { createdAt: 'desc' }
         });
+
+        let nextCursor: string | undefined = undefined;
+        if (messages.length > limit) {
+            const nextItem = messages.pop();
+            nextCursor = nextItem?.id;
+        }
+
+        return {
+            messages: messages.reverse(),
+            nextCursor
+        };
     },
 
     sendMessage: async (userId: string, receiverId: string, content: string, imageUrl?: string, audioUrl?: string) => {

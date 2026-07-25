@@ -29,7 +29,7 @@ const uploadAudio = multer({
 
         // For mobile/browser recordings, mimetype might be audio/webm, audio/mp4 etc.
         // We broadly allow 'audio/' type as well for safety
-        if (mimetype || extname || file.mimetype.startsWith('audio/')) {
+        if ((mimetype && extname) || (extname && file.mimetype.startsWith('audio/'))) {
             return cb(null, true);
         }
         cb(new Error('Sadece ses formatları desteklenir (webm, mp3, wav, vb.)'));

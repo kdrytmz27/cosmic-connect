@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verify2FA = exports.setup2FA = exports.login = exports.register = void 0;
+exports.resetPassword = exports.forgotPassword = exports.verify2FA = exports.setup2FA = exports.login = exports.register = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const UserRole_1 = require("../enums/UserRole");
 const speakeasy_1 = __importDefault(require("speakeasy"));
@@ -11,6 +11,7 @@ const qrcode_1 = __importDefault(require("qrcode"));
 const index_1 = require("../index");
 const astrology_1 = require("../utils/astrology");
 const jwt_1 = require("../utils/jwt");
+const synastry_service_1 = require("../services/synastry.service");
 const register = async (req, res) => {
     try {
         const { email, password, birthDate, birthTime, latitude, longitude } = req.body;
@@ -54,6 +55,7 @@ const register = async (req, res) => {
         const sunSign = (0, astrology_1.calculateSunSign)(day, month);
         const moonSign = (0, astrology_1.calculateMoonSign)(year, month, day);
         const risingSign = (0, astrology_1.calculateRisingSign)(birthTime, sunSign);
+        const planetPositions = (0, synastry_service_1.calculatePlanetaryPositions)(bDate, birthTime || '12:00');
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
         const role = UserRole_1.UserRole.STANDARD; // Enforce STANDARD role for all new users to prevent Privilege Escalation
         const newUser = await index_1.prisma.user.create({
@@ -67,7 +69,8 @@ const register = async (req, res) => {
                 role,
                 sunSign,
                 moonSign,
-                risingSign
+                risingSign,
+                planetPositions: planetPositions
             }
         });
         const token = (0, jwt_1.signToken)(newUser.id, newUser.role);
@@ -200,4 +203,69 @@ const verify2FA = async (req, res) => {
     }
 };
 exports.verify2FA = verify2FA;
+const crypto_1 = __importDefault(require("crypto"));
+const mailer_1 = require("../utils/mailer");
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email)
+            return res.status(400).json({ error: 'Email is required' });
+        const user = await index_1.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+        if (!user) {
+            // Güvenlik: Kullanıcı var mı yok mu belli etmiyoruz
+            return res.json({ message: 'If that email exists, a reset link has been sent.' });
+        }
+        const resetToken = crypto_1.default.randomBytes(32).toString('hex');
+        const resetTokenHash = crypto_1.default.createHash('sha256').update(resetToken).digest('hex');
+        await index_1.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                resetToken: resetTokenHash,
+                resetTokenExpires: new Date(Date.now() + 60 * 60 * 1000) // 1 saat geçerli
+            }
+        });
+        await (0, mailer_1.sendPasswordResetEmail)(user.email, resetToken);
+        res.json({ message: 'If that email exists, a reset link has been sent.' });
+    }
+    catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.forgotPassword = forgotPassword;
+const resetPassword = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword)
+            return res.status(400).json({ error: 'Token and new password required' });
+        if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+            return res.status(400).json({ error: 'Password must contain uppercase, lowercase, a number, and be at least 8 characters.' });
+        }
+        const resetTokenHash = crypto_1.default.createHash('sha256').update(token).digest('hex');
+        const user = await index_1.prisma.user.findFirst({
+            where: {
+                resetToken: resetTokenHash,
+                resetTokenExpires: { gt: new Date() }
+            }
+        });
+        if (!user) {
+            return res.status(400).json({ error: 'Token is invalid or has expired' });
+        }
+        const passwordHash = await bcryptjs_1.default.hash(newPassword, 10);
+        await index_1.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                passwordHash,
+                resetToken: null,
+                resetTokenExpires: null
+            }
+        });
+        res.json({ message: 'Password reset successful. You can now login.' });
+    }
+    catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.resetPassword = resetPassword;
 //# sourceMappingURL=auth.controller.js.map

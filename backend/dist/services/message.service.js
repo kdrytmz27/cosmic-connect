@@ -44,16 +44,17 @@ exports.messageService = {
             orderBy: { createdAt: 'asc' }
         });
     },
-    sendMessage: async (userId, receiverId, content) => {
+    sendMessage: async (userId, receiverId, content, imageUrl, audioUrl) => {
         // Prevent self-messaging
         if (userId === receiverId) {
             throw new Error('Kendinize mesaj gönderemezsiniz');
         }
-        // Content validation
-        if (!content || typeof content !== 'string' || content.trim().length === 0) {
-            throw new Error('Mesaj içeriği boş olamaz');
+        // Content validation (Eğer imageUrl veya audioUrl varsa içerik boş olabilir)
+        const hasContent = content && typeof content === 'string' && content.trim().length > 0;
+        if (!hasContent && !imageUrl && !audioUrl) {
+            throw new Error('Mesaj içeriği, fotoğraf veya ses boş olamaz');
         }
-        if (content.length > 2000) {
+        if (content && content.length > 2000) {
             throw new Error('Mesaj çok uzun (max 2000 karakter)');
         }
         const existingMessages = await index_1.prisma.message.findFirst({
@@ -91,7 +92,7 @@ exports.messageService = {
             throw new Error('Eşleşme süresi doldu, mesaj yollanamaz');
         }
         const msg = await index_1.prisma.message.create({
-            data: { senderId: userId, receiverId, content }
+            data: { senderId: userId, receiverId, content, imageUrl: imageUrl || null, audioUrl: audioUrl || null }
         });
         // VULN 50 FIX: Removed 'karma: { increment: 1 }' from messaging to prevent Infinite Spam Farm
         await index_1.prisma.user.updateMany({
@@ -105,6 +106,8 @@ exports.messageService = {
             io.to(receiverId).emit('receivePrivateMessage', {
                 senderId: userId,
                 content,
+                imageUrl,
+                audioUrl,
                 timestamp: msg.createdAt.getTime(),
                 messageId: msg.id
             });
@@ -114,7 +117,7 @@ exports.messageService = {
             userId: receiverId,
             type: 'MESSAGE',
             title: senderInfo?.name || 'Yeni Mesaj',
-            content: content.length > 50 ? content.substring(0, 47) + '...' : content,
+            content: content.length > 50 ? content.substring(0, 47) + '...' : (audioUrl ? '🎤 Sesli Mesaj' : content),
             actionUrl: '/messages',
             entityId: msg.id
         });

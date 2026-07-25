@@ -9,6 +9,7 @@ const index_1 = require("../index");
 const logger_1 = require("../utils/logger");
 const UserRole_1 = require("../enums/UserRole");
 let _io = null;
+const disconnectTimeouts = new Map();
 function getSocketIo() {
     return _io;
 }
@@ -33,6 +34,11 @@ function setupSocket(io) {
     io.on('connection', (socket) => {
         const userId = socket.userId;
         logger_1.logger.debug(`Socket user connected: ${userId} - ${socket.id}`);
+        // Eğer kullanıcının bekleyen bir kopma zamanlayıcısı varsa iptal et (30 saniye içinde geri döndü)
+        if (disconnectTimeouts.has(userId)) {
+            clearTimeout(disconnectTimeouts.get(userId));
+            disconnectTimeouts.delete(userId);
+        }
         // Set user as online
         index_1.prisma.user.update({
             where: { id: userId },
@@ -81,17 +87,14 @@ function setupSocket(io) {
             // Security check: Verify user is actually part of this room
             if (userId !== room.p1 && userId !== room.p2)
                 return;
-            room.extraTimeRequests.add(userId);
-            if (room.extraTimeRequests.size === 2) {
-                // Both requested, grant 60s
-                const extended = matchmaking_service_1.matchmakingService.extendRoomTime(data.roomId, 60000);
-                if (extended) {
-                    io.to(data.roomId).emit('extraTimeGranted', { addedSeconds: 60 });
-                }
+            if ((room.extensionsCount || 0) >= 2) {
+                socket.emit('queueStatus', { status: 'error', message: 'Maksimum uzatma sınırına (2) ulaştınız. Lütfen arkadaş ekleyin.' });
+                return;
             }
-            else {
-                // Just notify the room that a user requested extra time
-                io.to(data.roomId).emit('extraTimeRequested', { byUserId: userId });
+            // Immediately grant +160s when requested by ANY user
+            const extended = matchmaking_service_1.matchmakingService.extendRoomTime(data.roomId, 160000);
+            if (extended) {
+                io.to(data.roomId).emit('extraTimeGranted', { addedSeconds: 160 });
             }
         });
         // Handle real-time ephemeral messages within the room (e.g., matchmaking rooms)
@@ -176,20 +179,24 @@ function setupSocket(io) {
                 logger_1.logger.error('Error sending group msg:', e);
             }
         });
-        socket.on('disconnect', async () => {
-            logger_1.logger.debug(`Socket disconnected: ${userId}`);
+        socket.on('disconnect', () => {
+            logger_1.logger.debug(`Socket disconnected: ${userId}. Waiting 30s before marking offline.`);
             matchmaking_service_1.matchmakingService.removeFromQueue(userId);
-            try {
-                const now = new Date();
-                await index_1.prisma.user.update({
-                    where: { id: userId },
-                    data: { isOnline: false, lastSeen: now }
-                });
-                io.emit('userStatusChanged', { userId, isOnline: false, lastSeen: now });
-            }
-            catch (err) {
-                logger_1.logger.error(`Error updating disconnect status for ${userId}:`, err);
-            }
+            const timeoutId = setTimeout(async () => {
+                try {
+                    const now = new Date();
+                    await index_1.prisma.user.update({
+                        where: { id: userId },
+                        data: { isOnline: false, lastSeen: now }
+                    });
+                    io.emit('userStatusChanged', { userId, isOnline: false, lastSeen: now });
+                    disconnectTimeouts.delete(userId);
+                }
+                catch (err) {
+                    logger_1.logger.error(`Error updating disconnect status for ${userId}:`, err);
+                }
+            }, 30000); // 30 saniye tolerans
+            disconnectTimeouts.set(userId, timeoutId);
         });
     });
 }

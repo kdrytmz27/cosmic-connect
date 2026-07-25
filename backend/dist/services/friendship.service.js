@@ -11,11 +11,19 @@ exports.friendshipService = {
     checkIfFriends: async (userId1, userId2) => {
         const ab = await index_1.prisma.friendship.findFirst({ where: { user1Id: userId1, user2Id: userId2 } });
         const ba = await index_1.prisma.friendship.findFirst({ where: { user1Id: userId2, user2Id: userId1 } });
-        if (!ab || !ba)
+        console.log(`🔍 [checkIfFriends] userId1=${userId1}, userId2=${userId2}`);
+        console.log(`🔍 [checkIfFriends] ab=`, ab ? { status: ab.status, expiresAt: ab.expiresAt } : 'NULL');
+        console.log(`🔍 [checkIfFriends] ba=`, ba ? { status: ba.status, expiresAt: ba.expiresAt } : 'NULL');
+        if (!ab || !ba) {
+            console.log(`🔍 [checkIfFriends] RESULT: false (missing record)`);
             return false;
-        if (ab.expiresAt && ab.expiresAt <= new Date())
-            return false;
-        return true;
+        }
+        if (ab.status === 'FRIEND' && ab.expiresAt === null) {
+            console.log(`🔍 [checkIfFriends] RESULT: TRUE (status=FRIEND, expiresAt=null)`);
+            return true;
+        }
+        console.log(`🔍 [checkIfFriends] RESULT: false (status=${ab.status}, expiresAt=${ab.expiresAt})`);
+        return false;
     },
     createFriendship: async (userId1, userId2) => {
         const existingAB = await index_1.prisma.friendship.findFirst({ where: { user1Id: userId1, user2Id: userId2 } });
@@ -65,6 +73,27 @@ exports.friendshipService = {
     addFriend: async (senderId, receiverId) => {
         const existingIn = await index_1.prisma.friendship.findFirst({ where: { user1Id: receiverId, user2Id: senderId } });
         const existingOut = await index_1.prisma.friendship.findFirst({ where: { user1Id: senderId, user2Id: receiverId } });
+        // If BOTH sides have a MATCH record, upgrade to permanent FRIEND
+        if (existingIn && existingOut) {
+            const bothMatch = (existingIn.status === 'MATCH' || existingIn.status === 'SWIPE_MATCH') &&
+                (existingOut.status === 'MATCH' || existingOut.status === 'SWIPE_MATCH');
+            if (bothMatch) {
+                await index_1.prisma.friendship.updateMany({
+                    where: { OR: [{ user1Id: senderId, user2Id: receiverId }, { user1Id: receiverId, user2Id: senderId }] },
+                    data: { status: 'FRIEND', expiresAt: null }
+                });
+                await notification_service_1.notificationService.createNotification({
+                    userId: receiverId,
+                    type: 'MATCH',
+                    title: 'Kalıcı Arkadaş!',
+                    content: 'Artık kalıcı arkadaşsınız, mesajlaşmaya devam edebilirsiniz!',
+                    actionUrl: '/messages'
+                });
+                return { message: 'Kalıcı arkadaş oldunuz!', matched: true, permanent: true };
+            }
+            // Already permanent friends
+            return { message: 'Zaten arkadaşsınız', matched: true };
+        }
         if (existingIn) {
             if (!existingOut) {
                 await index_1.prisma.friendship.create({ data: { user1Id: senderId, user2Id: receiverId, status: 'SWIPE_MATCH' } });
@@ -91,10 +120,10 @@ exports.friendshipService = {
             return { message: 'Eşleşme oluştu!', matched: true, isPremium: senderPremium?.isPremium };
         }
         if (existingOut) {
-            return { message: 'Request already sent', matched: false };
+            return { message: 'İstek zaten gönderildi', matched: false };
         }
         await index_1.prisma.friendship.create({ data: { user1Id: senderId, user2Id: receiverId, status: 'SWIPE_MATCH' } });
-        return { message: 'Friend request sent', matched: false };
+        return { message: 'Arkadaşlık isteği gönderildi', matched: false };
     },
     getFriends: async (userId) => {
         const currentUser = await index_1.prisma.user.findUnique({ where: { id: userId } });
@@ -194,18 +223,24 @@ exports.friendshipService = {
         if (existingRelation?.status === 'MATCH' && existingRelation?.expiresAt && new Date() < existingRelation.expiresAt) {
             return { success: true, expiresAt: existingRelation.expiresAt.toISOString(), serverTime: Date.now() };
         }
-        // Security: must have a prior relation (SWIPE_MATCH from socket matchmaking OR existing friendship)
-        if (!existingRelation) {
-            throw new Error('Geçersiz İşlem: Eşleşme olmadan zorla kabul sağlanamaz (Force Match Kalkanı).');
-        }
-        // Delete old records, create fresh bidirectional MATCH
-        await index_1.prisma.friendship.deleteMany({
+        const expiresAt = new Date(Date.now() + constants_1.CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
+        // Update any existing records to MATCH (No deleteMany to prevent race condition gaps)
+        await index_1.prisma.friendship.updateMany({
+            where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] },
+            data: { status: 'MATCH', expiresAt }
+        });
+        // Ensure bidirectional relationship exists for getFriends
+        const rels = await index_1.prisma.friendship.findMany({
             where: { OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }] }
         });
-        const expiresAt = new Date(Date.now() + constants_1.CONSTANTS.DURATIONS.MATCH_EXPIRY_MS);
-        await index_1.prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' } });
-        await index_1.prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' } });
+        if (!rels.some(r => r.user1Id === userId && r.user2Id === targetId)) {
+            await index_1.prisma.friendship.create({ data: { user1Id: userId, user2Id: targetId, expiresAt, status: 'MATCH' } });
+        }
+        if (!rels.some(r => r.user1Id === targetId && r.user2Id === userId)) {
+            await index_1.prisma.friendship.create({ data: { user1Id: targetId, user2Id: userId, expiresAt, status: 'MATCH' } });
+        }
         // FEAT-08: Increment daily quest matches & FEAT-10: Karma reward
+        // Prevent double rewarding in race conditions by checking idempotency above
         await index_1.prisma.user.updateMany({
             where: { id: userId },
             data: { dailyQuestMatches: { increment: 1 }, karma: { increment: 5 } }
@@ -378,19 +413,38 @@ exports.friendshipService = {
         });
     },
     getFriendRequestStatus: async (userId, targetId) => {
+        console.log(`🔍 [getFriendRequestStatus] userId=${userId}, targetId=${targetId}`);
+        // VULN 35 FIX: Prevent temporary matches from appearing as permanent friends
+        const matchRelation = await index_1.prisma.friendship.findFirst({
+            where: {
+                OR: [{ user1Id: userId, user2Id: targetId }, { user1Id: targetId, user2Id: userId }],
+                status: 'MATCH'
+            }
+        });
+        if (matchRelation && matchRelation.expiresAt && new Date() < matchRelation.expiresAt) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: MATCH`);
+            return { status: 'MATCH' };
+        }
         const areFriends = await exports.friendshipService.checkIfFriends(userId, targetId);
-        if (areFriends)
+        if (areFriends) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: friends`);
             return { status: 'friends' };
+        }
         const sentRequest = await index_1.prisma.friendRequest.findFirst({
             where: { senderId: userId, receiverId: targetId, status: 'PENDING' }
         });
-        if (sentRequest)
+        if (sentRequest) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: sent`);
             return { status: 'sent', requestId: sentRequest.id };
+        }
         const receivedRequest = await index_1.prisma.friendRequest.findFirst({
             where: { senderId: targetId, receiverId: userId, status: 'PENDING' }
         });
-        if (receivedRequest)
+        if (receivedRequest) {
+            console.log(`🔍 [getFriendRequestStatus] RETURNING: received`);
             return { status: 'received', requestId: receivedRequest.id };
+        }
+        console.log(`🔍 [getFriendRequestStatus] RETURNING: none`);
         return { status: 'none' };
     }
 };

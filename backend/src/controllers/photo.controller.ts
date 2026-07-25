@@ -1,9 +1,9 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../index';
 import fs from 'fs';
 import path from 'path';
 
-export const uploadAvatar = async (req: Request, res: Response): Promise<any> => {
+export const uploadAvatar = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -32,12 +32,11 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<any> =>
 
         res.json({ message: 'Profil fotoğrafı güncellendi', avatar: updatedUser.avatar });
     } catch (error) {
-        console.error('Upload Avatar Error:', error);
-        res.status(500).json({ message: 'Sunucu hatası' });
+        next(error);
     }
 };
 
-export const uploadGalleryPhoto = async (req: Request, res: Response): Promise<any> => {
+export const uploadGalleryPhoto = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -67,12 +66,11 @@ export const uploadGalleryPhoto = async (req: Request, res: Response): Promise<a
 
         res.json({ message: 'Galeriye resim eklendi', photo });
     } catch (error) {
-        console.error('Upload Gallery Error:', error);
-        res.status(500).json({ message: 'Sunucu hatası' });
+        next(error);
     }
 };
 
-export const deleteGalleryPhoto = async (req: Request, res: Response): Promise<any> => {
+export const deleteGalleryPhoto = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -89,9 +87,10 @@ export const deleteGalleryPhoto = async (req: Request, res: Response): Promise<a
             return res.status(403).json({ message: 'Bu işlem için yetkiniz yok' });
         }
 
-        // Delete from filesystem
+        // Delete from filesystem securely
         if (photo.url && photo.url.startsWith('/uploads/')) {
-            const filePath = path.join(__dirname, '../../', photo.url);
+            const fileName = path.basename(photo.url);
+            const filePath = path.join(__dirname, '../../uploads', fileName);
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
             }
@@ -102,12 +101,11 @@ export const deleteGalleryPhoto = async (req: Request, res: Response): Promise<a
 
         res.json({ message: 'Fotoğraf silindi', success: true });
     } catch (error) {
-        console.error('Delete Gallery Photo Error:', error);
-        res.status(500).json({ message: 'Sunucu hatası' });
+        next(error);
     }
 };
 
-export const uploadChatPhoto = async (req: Request, res: Response): Promise<any> => {
+export const uploadChatPhoto = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -121,7 +119,6 @@ export const uploadChatPhoto = async (req: Request, res: Response): Promise<any>
         // Chat fotoğrafları Photo (Galeri) tablosuna kaydedilmez, doğrudan mesajla birlikte kullanılmak üzere link döndürülür
         res.json({ message: 'Sohbet resmi yüklendi', imageUrl: photoUrl });
     } catch (error) {
-        console.error('Upload Chat Photo Error:', error);
-        res.status(500).json({ message: 'Sunucu hatası' });
+        next(error);
     }
 };

@@ -14,25 +14,37 @@ function isCacheStale(): boolean {
     return now.toDateString() !== cacheLoadedAt.toDateString();
 }
 
+let cachePromise: Promise<void> | null = null;
+
 async function ensureCacheLoaded(): Promise<void> {
     if (!isCacheStale() && templateCache.size > 0) return;
 
-    const allTemplates = await prisma.horoscopeTemplate.findMany({
-        orderBy: { id: 'asc' }
-    });
+    if (!cachePromise) {
+        cachePromise = (async () => {
+            try {
+                const allTemplates = await prisma.horoscopeTemplate.findMany({
+                    orderBy: { id: 'asc' }
+                });
 
-    const newCache = new Map<string, { content: string }[]>();
-    for (const t of allTemplates) {
-        const key = `${t.sign}-${t.category}`;
-        if (!newCache.has(key)) {
-            newCache.set(key, []);
-        }
-        newCache.get(key)!.push({ content: t.content });
+                const newCache = new Map<string, { content: string }[]>();
+                for (const t of allTemplates) {
+                    const key = `${t.sign}-${t.category}`;
+                    if (!newCache.has(key)) {
+                        newCache.set(key, []);
+                    }
+                    newCache.get(key)!.push({ content: t.content });
+                }
+
+                templateCache = newCache;
+                cacheLoadedAt = new Date();
+                logger.info(`[HoroscopeCache] Loaded ${allTemplates.length} templates into cache (${newCache.size} groups)`);
+            } finally {
+                cachePromise = null;
+            }
+        })();
     }
-
-    templateCache = newCache;
-    cacheLoadedAt = new Date();
-    logger.info(`[HoroscopeCache] Loaded ${allTemplates.length} templates into cache (${newCache.size} groups)`);
+    
+    return cachePromise;
 }
 
 export const horoscopeService = {

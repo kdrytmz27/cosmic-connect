@@ -126,10 +126,15 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({ activeConver
                                             <span style={{ position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', background: '#22c55e', border: '2px solid #0f0f1e', display: 'block' }} />
                                         )}
                                     </div>
-                                    <div className="list-item-info">
-                                        <h3 className="list-item-title" style={{ filter: friend.isBlurred ? 'blur(4px)' : 'none' }}>
+                                    <div className="list-item-info" style={{ flex: 1 }}>
+                                        <h3 className="list-item-title" style={{ filter: friend.isBlurred ? 'blur(4px)' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
                                             {friend.isBlurred ? 'Gizemli Ruh' : name}
                                             {!friend.isBlurred && friend.isPremium && <Crown size={14} color="var(--accent-gold)" />}
+                                            {!friend.isBlurred && friend.unreadCount && friend.unreadCount > 0 ? (
+                                                <span style={{ background: '#ef4444', color: 'white', fontSize: 10, fontWeight: 'bold', padding: '2px 6px', borderRadius: 10 }}>
+                                                    {friend.unreadCount}
+                                                </span>
+                                            ) : null}
                                         </h3>
                                         <p className="list-item-subtitle" style={{
                                             color: isMine ? 'var(--text-secondary)' : 'white',

@@ -10,7 +10,8 @@ import '../../styles/messages.css';
 import ExtendMatchModal from './ExtendMatchModal';
 import { majorArcana } from '../../data/tarot';
 import VoiceRecorder from '../common/VoiceRecorder';
-
+import AudioMessage from '../common/AudioMessage';
+import { TransitRadar } from './TransitRadar';
 const GIFTS: IGift[] = [
     { id: 'CRYSTAL', emoji: '💎', cost: 50, name: 'Kristal' },
     { id: 'MOON', emoji: '🌙', cost: 100, name: 'Ay Işığı' },
@@ -41,6 +42,9 @@ interface ChatViewProps {
     handleExtendMatch: (targetId?: string) => void;
     messagesEndRef: React.RefObject<HTMLDivElement | null>;
     updateEconomy: (data: any) => void;
+    loadMoreMessages: () => void;
+    nextCursor: string | null;
+    loadingMore: boolean;
 }
 
 const ChatView: React.FC<ChatViewProps> = ({
@@ -49,7 +53,8 @@ const ChatView: React.FC<ChatViewProps> = ({
     chatTimeLeft, typingUsers, isPremium, actionLoading, setActionLoading,
     setFriends, socket,
     handleSendMessage, handleMessageInputChange, messageInput,
-    handleExtendMatch, messagesEndRef, updateEconomy
+    handleExtendMatch, messagesEndRef, updateEconomy,
+    loadMoreMessages, nextCursor, loadingMore
 }) => {
     const navigate = useNavigate();
     const { showToast } = useToast();
@@ -60,6 +65,10 @@ const ChatView: React.FC<ChatViewProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [uploadingAudio, setUploadingAudio] = useState(false);
+    
+    // Icebreaker Modal States
+    const [showIcebreakerModal, setShowIcebreakerModal] = useState(false);
+    const [icebreakerOptions, setIcebreakerOptions] = useState<string[]>([]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -171,8 +180,8 @@ const ChatView: React.FC<ChatViewProps> = ({
         return () => document.body.classList.remove('hide-nav');
     }, []);
 
-    // FEAT-11 Icebreaker Logic
-    const getIcebreaker = (mySign: string, theirSign: string) => {
+    // FEAT-11 Icebreaker Logic (Revamped)
+    const getIcebreakers = (mySign: string, theirSign: string): string[] => {
         const fire = ['Aries', 'Leo', 'Sagittarius', 'Koç', 'Aslan', 'Yay'];
         const earth = ['Taurus', 'Virgo', 'Capricorn', 'Boğa', 'Başak', 'Oğlak'];
         const air = ['Gemini', 'Libra', 'Aquarius', 'İkizler', 'Terazi', 'Kova'];
@@ -189,19 +198,53 @@ const ChatView: React.FC<ChatViewProps> = ({
         const e1 = getEl(mySign);
         const e2 = getEl(theirSign || '');
 
-        if (e1 === 'Ateş' && e2 === 'Ateş') return "İki Ateş yan yana! Birlikte atılacağınız ilk macera ne olurdu?";
-        if (e1 === 'Su' && e2 === 'Su') return "İki Su elementi... Duygusal derinlikler yüksek. En son hangi filmde ağladın?";
-        if (e1 === 'Toprak' && e2 === 'Toprak') return "Sağlam ve kararlı iki Toprak. En sevdiğin konfor yemeği nedir?";
-        if (e1 === 'Hava' && e2 === 'Hava') return "İki Hava, sonsuz zihinsel akış... Saatlerce tartışabileceğin o konu ne?";
+        if (e1 === 'Ateş' && e2 === 'Ateş') return [
+            "İkimiz de Ateş elementiyiz... Sence yan yana gelirsek etrafı yakar mıyız? 🔥",
+            "Benim enerjim yüksek ama seninki de benden aşağı kalmıyor gibi. Birlikte atılacağımız ilk macera ne olurdu?",
+            "Ateş ve ateş yan yana gelirse tutku kaçınılmaz olurmuş. Buna katılıyor musun? ✨"
+        ];
+        if (e1 === 'Su' && e2 === 'Su') return [
+            "İkimiz de Su elementiyiz... Sanırım sadece bakışarak bile birbirimizi anlayabiliriz. 🌊",
+            "Duygusal derinlik ikimiz için de önemli. En son hangi filmde benim kadar ağladın?",
+            "Benim Güneş'im de senin gibi bir Su burcunda. Sence de bu ruhsal bir bağlantı değil mi? 🔮"
+        ];
+        if (e1 === 'Toprak' && e2 === 'Toprak') return [
+            "Sağlam ve kararlı iki Toprak burcu... Sence de harika bir güven ortamı yaratmaz mıyız? 🌲",
+            "Ben de senin gibi hayatın konforunu seviyorum. Benim için en iyi pazar günü evde güzel bir kahve eşliğinde dinlenmektir, ya senin?",
+            "İkimiz de mantıklı adımlar atmayı seviyoruz. Peki aşkta da o kadar mantıklı mısın? 🤎"
+        ];
+        if (e1 === 'Hava' && e2 === 'Hava') return [
+            "İki Hava burcu yan yana... Seninle saatlerce bıkmadan tartışabileceğimiz o konu ne olurdu? 🌪️",
+            "Benim zihnim sürekli dolu, senin de öyle görünüyor. Birlikte bir beyin fırtınası yapsak sence neler çıkarırız?",
+            "İkimiz de özgürlüğümüze düşkünüz. Sence iki özgür ruh aynı yörüngede buluşabilir mi? 🌌"
+        ];
 
-        if ((e1 === 'Ateş' && e2 === 'Su') || (e1 === 'Su' && e2 === 'Ateş')) return "Ateş ve Su zıttır ama çok çeker! Onu şaşırtacak bir özelliğini paylaş.";
-        if ((e1 === 'Ateş' && e2 === 'Hava') || (e1 === 'Hava' && e2 === 'Ateş')) return "Hava, Ateş'i harlandırır! Birlikte süper ikili olurdunuz, sence hangi süper gücünüz olurdu?";
-        if ((e1 === 'Su' && e2 === 'Toprak') || (e1 === 'Toprak' && e2 === 'Su')) return "Su, toprağı besler. Huzurlu bir hafta sonu planı hayal et, ne yapardınız?";
-        return "Yıldızlar sizi bir araya getirdi! Dikkatini çeken ilk detayı ona söylemek ister misin?";
+        if ((e1 === 'Ateş' && e2 === 'Su') || (e1 === 'Su' && e2 === 'Ateş')) return [
+            "Ateş ve Su zıttır ama birbirini çok çeker derler... Sence ben seni nasıl şaşırtabilirim?",
+            "Benim elementimle seninki tamamen zıt. Sence bu farklılık bizi mükemmel bir dengeye götürür mü? ☯️",
+            "Zıt kutuplar çeker derler... Senin sakinliğin benim enerjimi dengeleyebilir mi sence?"
+        ];
+        if ((e1 === 'Ateş' && e2 === 'Hava') || (e1 === 'Hava' && e2 === 'Ateş')) return [
+            "Hava her zaman Ateş'i harlandırır! Seninle harika bir ikili olurduk... Sence bizim süper gücümüz ne olurdu? ⚡",
+            "Benim enerjimle senin zekan birleşirse sence ortaya nasıl bir macera çıkar?",
+            "Elementlerimiz birbirini besliyor! Sence ilk buluşmamızda dünyayı fethedebilir miyiz? 🌍"
+        ];
+        if ((e1 === 'Su' && e2 === 'Toprak') || (e1 === 'Toprak' && e2 === 'Su')) return [
+            "Su, her zaman toprağı besler... Sence de aramızda çok sağlam ve güvenli bir bağ oluşmaz mı? 🌱",
+            "Huzurlu bir hafta sonu planı hayal etsek, benimle neler yapmak isterdin?",
+            "Benim hislerimle senin mantığın yan yana gelirse sence her sorunu çözebilir miyiz? 🧩"
+        ];
+
+        return [
+            "Yıldızlar bizi bir araya getirdiğine göre evrenin bir planı olmalı! Sence bu nedir? ✨",
+            "Burçlarımız ne derse desin, profilinde ilk dikkatimi çeken şey ne oldu biliyor musun?",
+            "Güneş burcum pek belli etmese de, yükselenim seninle çok iyi anlaşacağımızı söylüyor! Sence haklı mı? 🪐"
+        ];
     };
 
     return (
         <div className="chat-container">
+            <TransitRadar userSign={userSunSign} partnerSign={activeChat.sunSign || 'Aries'} />
             <div className="glass-panel chat-header">
                 <button onClick={() => setActiveChat(null)} className="chat-back-btn">
                     <ArrowLeft size={20} />
@@ -276,6 +319,17 @@ const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             <div className="chat-messages-area">
+                {nextCursor && (
+                    <div className="flex justify-center my-2">
+                        <button
+                            onClick={loadMoreMessages}
+                            disabled={loadingMore}
+                            className="btn-secondary-gold text-xs py-1 px-3"
+                        >
+                            {loadingMore ? 'Yükleniyor...' : 'Eski Mesajları Yükle'}
+                        </button>
+                    </div>
+                )}
                 {messages.length === 0 ? (
                     <div className="chat-empty-state">
                         <Sparkles size={32} color="var(--accent-gold)" className="mx-auto mb-3" />
@@ -284,7 +338,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%' }}>
                             <div style={{ background: 'rgba(255, 215, 0, 0.1)', padding: 12, borderRadius: 12, border: '1px solid rgba(255,215,0,0.3)', maxWidth: '80%' }}>
                                 <p style={{ fontSize: 13, color: 'var(--accent-gold)', fontStyle: 'italic', margin: 0 }}>
-                                    💡 Kozmik Buz Kırıcı: <br /> "{getIcebreaker(userSunSign, activeChat.sunSign || '')}"
+                                    💡 Kozmik Buz Kırıcı: <br /> "{getIcebreakers(userSunSign, activeChat.sunSign || '')[0]}"
                                 </p>
                             </div>
 
@@ -349,7 +403,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                                 )}
                                 {m.audioUrl && (
                                     <div style={{ marginBottom: content ? '8px' : '0' }}>
-                                        <audio controls src={`${BACKEND_URL}${m.audioUrl}`} style={{ height: 36, maxWidth: 220 }} />
+                                        <AudioMessage url={m.audioUrl} isMine={isMine} />
                                     </div>
                                 )}
                                 {content && <div>{content}</div>}
@@ -396,7 +450,39 @@ const ChatView: React.FC<ChatViewProps> = ({
                         </motion.div>
                     )}
                 </AnimatePresence>
-                <div className="flex gap-2 items-center">
+
+                {/* Icebreaker Modal Overlay */}
+                <AnimatePresence>
+                    {showIcebreakerModal && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className="absolute bottom-[80px] left-2 right-2 md:left-auto md:right-[20px] md:w-[350px] bg-black/80 backdrop-blur-xl border border-[var(--accent-gold)] shadow-[0_0_20px_rgba(255,215,0,0.3)] rounded-2xl p-4 z-50 flex flex-col gap-3"
+                        >
+                            <div className="flex justify-between items-center mb-1">
+                                <h4 className="text-[var(--accent-gold)] font-bold text-sm flex items-center gap-2"><Sparkles size={16}/> Kozmik Mesajını Seç</h4>
+                                <button onClick={() => setShowIcebreakerModal(false)} className="text-white/50 hover:text-white">✕</button>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                {icebreakerOptions.map((opt, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => {
+                                            handleMessageInputChange({ target: { value: opt } } as React.ChangeEvent<HTMLInputElement>);
+                                            setShowIcebreakerModal(false);
+                                        }}
+                                        className="text-left text-sm text-white bg-white/5 hover:bg-[var(--accent-gold)]/20 border border-white/10 hover:border-[var(--accent-gold)]/50 p-3 rounded-xl transition-all"
+                                    >
+                                        "{opt}"
+                                    </button>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="flex gap-2 items-center relative">
                     {activeChat.isExpired ? (
                         <div className="w-full flex flex-col gap-2 py-2 px-1">
                             <p className="text-[var(--accent-pink)] text-[13px] text-center m-0 font-bold">Bu sohbetin süresi doldu!</p>
@@ -435,37 +521,39 @@ const ChatView: React.FC<ChatViewProps> = ({
                             >
                                 <Gift size={24} />
                             </button>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <form onSubmit={handleSendMessage} className="chat-input-form" style={{ flex: 1, display: messageInput.trim() ? 'flex' : 'none' }}>
-                                    <input
-                                        type="text"
-                                        value={messageInput}
-                                        onChange={handleMessageInputChange}
-                                        placeholder="Mesaj yaz..."
-                                        className="chat-input-field"
-                                    />
-                                    <button type="submit" disabled={!messageInput.trim()} className="chat-send-btn" style={{ color: messageInput.trim() ? 'var(--accent-pink)' : 'var(--text-secondary)' }}>
+                            <form onSubmit={handleSendMessage} className="chat-input-form flex-1 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIcebreakerOptions(getIcebreakers(userSunSign, activeChat.sunSign || ''));
+                                        setShowIcebreakerModal(true);
+                                    }}
+                                    className="gift-toggle-btn group relative"
+                                    style={{ color: 'var(--accent-gold)' }}
+                                    title="Kozmik Buzkıran ile mesaja başla"
+                                >
+                                    <Sparkles size={24} className="group-hover:animate-pulse" />
+                                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-[10px] text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Yıldızlara Sor</span>
+                                </button>
+                                <input
+                                    type="text"
+                                    value={messageInput}
+                                    onChange={handleMessageInputChange}
+                                    placeholder="Mesaj yaz..."
+                                    className="chat-input-field flex-1"
+                                />
+                                {messageInput.trim() ? (
+                                    <button type="submit" className="chat-send-btn" style={{ color: 'var(--accent-pink)' }}>
                                         <Send size={24} />
                                     </button>
-                                </form>
-                                {!messageInput.trim() && (
-                                    <>
-                                        <input
-                                            type="text"
-                                            value={messageInput}
-                                            onChange={handleMessageInputChange}
-                                            placeholder="Mesaj yaz..."
-                                            className="chat-input-field flex-1"
-                                            style={{ minWidth: 50 }}
-                                        />
-                                        <VoiceRecorder 
-                                            onRecordingComplete={handleAudioUpload} 
-                                            isUploading={uploadingAudio} 
-                                            maxDurationMs={180000} 
-                                        />
-                                    </>
+                                ) : (
+                                    <VoiceRecorder 
+                                        onRecordingComplete={handleAudioUpload} 
+                                        isUploading={uploadingAudio} 
+                                        maxDurationMs={180000} 
+                                    />
                                 )}
-                            </div>
+                            </form>
                         </>
                     )}
                 </div>

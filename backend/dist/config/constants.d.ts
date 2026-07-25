@@ -12,6 +12,7 @@ export declare const CONSTANTS: {
     COSTS: {
         EXTEND_MATCH: number;
         MAKE_MATCH_PERMANENT: number;
+        FORTUNE_TELLING_BASE: number;
     };
     REWARDS: {
         DAILY_LOGIN_BASE: number;
