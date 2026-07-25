@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSocket } from '../../context/SocketContext';
 import { LottiePlayer } from './lottie/LottiePlayer';
+import { AlphaVideoPlayer, isVideoAnimation } from './AlphaVideoPlayer';
 import { GiftHero } from './GiftHero';
 
 interface GiftEvent {
@@ -26,6 +27,9 @@ interface GiftEvent {
 
 const FALLBACK_DWELL_MS = 1800;
 const TOAST_DWELL_MS = 4000;
+// Oynatıcı "bitti" demezse (bozuk dosya, takılan çözücü) hediye katmanı ekranda asılı kalır -
+// bu emniyet süresi onu her hâlükârda kapatır.
+const MAX_ANIMATION_MS = 10000;
 
 export const GiftAnimationOverlay: React.FC = () => {
     const { socket } = useSocket();
@@ -61,9 +65,9 @@ export const GiftAnimationOverlay: React.FC = () => {
         setTimeout(playNext, 150);
     };
 
-    const scheduleFallbackDismiss = () => {
+    const scheduleFallbackDismiss = (ms: number = FALLBACK_DWELL_MS) => {
         if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        fallbackTimerRef.current = setTimeout(handleFullscreenDone, FALLBACK_DWELL_MS);
+        fallbackTimerRef.current = setTimeout(handleFullscreenDone, ms);
     };
 
     // Stable across renders (only touches refs/setState) so it can be shared by both the real
@@ -127,11 +131,11 @@ export const GiftAnimationOverlay: React.FC = () => {
         return () => window.removeEventListener('localGiftSend', handleLocal);
     }, [handleGift]);
 
-    // Once the fullscreen slot starts showing a fallback (no Lottie asset), kick off its dwell timer
+    // No asset -> the icon-only scene has no natural end, so give it a fixed dwell.
+    // With an asset the player reports completion; the long timer is only a safety net.
     useEffect(() => {
-        if (current && !current.animationUrl) {
-            scheduleFallbackDismiss();
-        }
+        if (!current) return;
+        scheduleFallbackDismiss(current.animationUrl ? MAX_ANIMATION_MS : FALLBACK_DWELL_MS);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [current?.id]);
 
@@ -169,7 +173,19 @@ export const GiftAnimationOverlay: React.FC = () => {
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 pointer-events-none bg-black/10"
                     >
-                        {current.animationUrl ? (
+                        {isVideoAnimation(current.animationUrl) ? (
+                            // Render edilmiş animasyon hediyenin TAMAMIDIR - üstüne ayrıca ikon
+                            // bindirmiyoruz, yoksa hediye iki kez görünür.
+                            <div className="relative w-full h-full max-w-md flex items-center justify-center">
+                                <AlphaVideoPlayer url={current.animationUrl!} className="w-full h-full" onComplete={handleFullscreenDone} />
+                                {(current.comboCount ?? 1) > 1 && (
+                                    <span className="absolute top-6 right-6 bg-secondary text-on-secondary text-2xl font-black px-3 py-0.5 rounded-full border-2 border-[#0b1326] shadow-[0_0_20px_rgba(255,198,64,0.8)]">
+                                        x{current.comboCount}
+                                    </span>
+                                )}
+                            </div>
+                        ) : current.animationUrl ? (
+                            // Vektör efekt arkada, hediyenin kendisi önde
                             <div className="relative w-full h-full max-w-md flex items-center justify-center">
                                 <LottiePlayer url={current.animationUrl} className="absolute inset-0 w-full h-full" onComplete={handleFullscreenDone} />
                                 <div className="relative">{renderIcon(current)}</div>
