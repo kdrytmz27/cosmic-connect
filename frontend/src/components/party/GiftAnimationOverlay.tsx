@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useSocket } from '../../context/SocketContext';
 import { LottiePlayer } from './lottie/LottiePlayer';
 import { AlphaVideoPlayer, isVideoAnimation } from './AlphaVideoPlayer';
 import { GiftHero } from './GiftHero';
+import { GiftStreakBanner } from './GiftStreakBanner';
 
 interface GiftEvent {
     id: string;
@@ -25,49 +26,66 @@ interface GiftEvent {
     category?: string;
 }
 
-const FALLBACK_DWELL_MS = 1800;
-const TOAST_DWELL_MS = 4000;
-// Oynatıcı "bitti" demezse (bozuk dosya, takılan çözücü) hediye katmanı ekranda asılı kalır -
-// bu emniyet süresi onu her hâlükârda kapatır.
+// Bant, son dokunuştan bu kadar sonra kaybolur. Referans uygulamada ölçülen aralık
+// ~3.4 saniyenin altındaydı; sunucudaki streak penceresiyle (2500ms) uyumlu tutuluyor.
+const BANNER_DWELL_MS = 3000;
+// Aynı anda ekranda duracak en fazla bant - fazlası odayı okunmaz hale getiriyor
+const MAX_BANNERS = 3;
+// Arka plan sahnesinin varlığı yoksa (sadece ikon) kendiliğinden bitmez, sabit süre verilir
+const SCENE_DWELL_MS = 2600;
+// Oynatıcı "bitti" demezse (bozuk dosya, takılan çözücü) sahne arkada asılı kalır
 const MAX_ANIMATION_MS = 10000;
 
+/**
+ * Hediye gönderiminin oda üstündeki gösterimi. İki ayrı katman:
+ *
+ * 1. Streak bantları (z-55) - HER hediye için, üst üste yığılır, ekranı kaplamaz ve
+ *    tıklamayı engellemez. Oda, koltuklar, sohbet ve hediye paneli görünür kalır.
+ * 2. Arka plan sahnesi (z-5) - yalnızca FULLSCREEN seviyesindeki pahalı hediyeler için,
+ *    arka plan görselinin üstünde ama içeriğin ALTINDA oynar. Sohbeti kapatmaz.
+ *
+ * Daha önce her FULLSCREEN hediye ekranın önünü tamamen kapatıyordu; hızlı combo
+ * atarken oda tamamen görünmez oluyordu.
+ */
 export const GiftAnimationOverlay: React.FC = () => {
     const { socket } = useSocket();
-    const queueRef = useRef<GiftEvent[]>([]);
-    const isPlayingRef = useRef(false);
-    const currentRef = useRef<GiftEvent | null>(null);
-    const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const toastTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-    const [current, setCurrent] = useState<GiftEvent | null>(null);
-    const [toasts, setToasts] = useState<GiftEvent[]>([]);
 
-    const setCurrentBoth = (gift: GiftEvent | null) => {
-        currentRef.current = gift;
-        setCurrent(gift);
+    const [banners, setBanners] = useState<GiftEvent[]>([]);
+    const bannerTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+    const [scene, setScene] = useState<GiftEvent | null>(null);
+    const sceneRef = useRef<GiftEvent | null>(null);
+    const sceneQueueRef = useRef<GiftEvent[]>([]);
+    const scenePlayingRef = useRef(false);
+    const sceneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const setSceneBoth = (gift: GiftEvent | null) => {
+        sceneRef.current = gift;
+        setScene(gift);
     };
 
-    const playNext = () => {
-        if (isPlayingRef.current) return;
-        const next = queueRef.current.shift();
+    const playNextScene = () => {
+        if (scenePlayingRef.current) return;
+        const next = sceneQueueRef.current.shift();
         if (!next) return;
-        isPlayingRef.current = true;
-        setCurrentBoth(next);
+        scenePlayingRef.current = true;
+        setSceneBoth(next);
     };
 
-    const handleFullscreenDone = () => {
-        if (fallbackTimerRef.current) {
-            clearTimeout(fallbackTimerRef.current);
-            fallbackTimerRef.current = null;
+    const handleSceneDone = () => {
+        if (sceneTimerRef.current) {
+            clearTimeout(sceneTimerRef.current);
+            sceneTimerRef.current = null;
         }
-        isPlayingRef.current = false;
-        setCurrentBoth(null);
-        // Small gap between back-to-back fullscreen gifts so they don't feel jarring
-        setTimeout(playNext, 150);
+        scenePlayingRef.current = false;
+        setSceneBoth(null);
+        // Arka arkaya gelen sahneler arasında küçük bir boşluk, yoksa sert görünüyor
+        setTimeout(playNextScene, 150);
     };
 
-    const scheduleFallbackDismiss = (ms: number = FALLBACK_DWELL_MS) => {
-        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        fallbackTimerRef.current = setTimeout(handleFullscreenDone, ms);
+    const scheduleSceneDismiss = (ms: number) => {
+        if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
+        sceneTimerRef.current = setTimeout(handleSceneDone, ms);
     };
 
     // Stable across renders (only touches refs/setState) so it can be shared by both the real
@@ -79,39 +97,39 @@ export const GiftAnimationOverlay: React.FC = () => {
         const merge = (existing: GiftEvent): GiftEvent =>
             (data.comboCount ?? 1) >= (existing.comboCount ?? 1) ? data : existing;
 
-        if (data.animationTier === 'FULLSCREEN') {
-            // Same streak already showing - update the badge in place, extend its dwell time,
-            // rather than queueing a whole separate animation for every rapid tap. This is also
-            // how an optimistic local tap and the server's later echo merge into one instance.
-            if (currentRef.current && currentRef.current.id === data.id) {
-                const merged = merge(currentRef.current);
-                setCurrentBoth(merged);
-                if (!merged.animationUrl) scheduleFallbackDismiss();
-                return;
+        // --- 1. Bant: her hediye için, aynı streak yerinde güncellenir
+        setBanners(prev => {
+            const idx = prev.findIndex(b => b.id === data.id);
+            if (idx !== -1) {
+                const next = [...prev];
+                next[idx] = merge(prev[idx]);
+                return next;
             }
-            const queuedIndex = queueRef.current.findIndex(g => g.id === data.id);
-            if (queuedIndex !== -1) {
-                queueRef.current[queuedIndex] = merge(queueRef.current[queuedIndex]);
-                return;
-            }
-            queueRef.current.push(data);
-            playNext();
-        } else {
-            setToasts(prev => {
-                const idx = prev.findIndex(t => t.id === data.id);
-                if (idx !== -1) {
-                    const next = [...prev];
-                    next[idx] = merge(prev[idx]);
-                    return next;
-                }
-                return [...prev.slice(-4), data];
-            });
-            if (toastTimersRef.current[data.id]) clearTimeout(toastTimersRef.current[data.id]);
-            toastTimersRef.current[data.id] = setTimeout(() => {
-                setToasts(prev => prev.filter(t => t.id !== data.id));
-                delete toastTimersRef.current[data.id];
-            }, TOAST_DWELL_MS);
+            return [...prev.slice(-(MAX_BANNERS - 1)), data];
+        });
+        if (bannerTimersRef.current[data.id]) clearTimeout(bannerTimersRef.current[data.id]);
+        bannerTimersRef.current[data.id] = setTimeout(() => {
+            setBanners(prev => prev.filter(b => b.id !== data.id));
+            delete bannerTimersRef.current[data.id];
+        }, BANNER_DWELL_MS);
+
+        // --- 2. Arka plan sahnesi: yalnızca pahalı hediyeler, sırayla tek tek
+        if (data.animationTier !== 'FULLSCREEN') return;
+
+        if (sceneRef.current && sceneRef.current.id === data.id) {
+            // Aynı streak zaten oynuyor - baştan başlatmak yerine yerinde güncelle
+            const merged = merge(sceneRef.current);
+            setSceneBoth(merged);
+            if (!merged.animationUrl) scheduleSceneDismiss(SCENE_DWELL_MS);
+            return;
         }
+        const queuedIndex = sceneQueueRef.current.findIndex(g => g.id === data.id);
+        if (queuedIndex !== -1) {
+            sceneQueueRef.current[queuedIndex] = merge(sceneQueueRef.current[queuedIndex]);
+            return;
+        }
+        sceneQueueRef.current.push(data);
+        playNextScene();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -131,94 +149,81 @@ export const GiftAnimationOverlay: React.FC = () => {
         return () => window.removeEventListener('localGiftSend', handleLocal);
     }, [handleGift]);
 
-    // No asset -> the icon-only scene has no natural end, so give it a fixed dwell.
-    // With an asset the player reports completion; the long timer is only a safety net.
+    // Varlığı olmayan sahnenin doğal bir sonu yok, sabit süre verilir. Varlığı olanda
+    // oynatıcı bitişi bildirir; uzun süre yalnızca emniyet ağıdır.
     useEffect(() => {
-        if (!current) return;
-        scheduleFallbackDismiss(current.animationUrl ? MAX_ANIMATION_MS : FALLBACK_DWELL_MS);
+        if (!scene) return;
+        scheduleSceneDismiss(scene.animationUrl ? MAX_ANIMATION_MS : SCENE_DWELL_MS);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [current?.id]);
+    }, [scene?.id]);
 
-    const senderReceiverLine = (gift: GiftEvent, size: 'lg' | 'sm') => (
-        <div className={`flex items-center gap-2 ${size === 'lg' ? 'text-base' : 'text-xs'}`}>
-            <img src={gift.sender?.avatar || `https://ui-avatars.com/api/?name=${gift.sender?.name}`} className={`rounded-full object-cover border-2 border-primary ${size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'}`} />
-            <span className="font-bold text-white drop-shadow">{gift.sender?.name}</span>
-            <span className="text-secondary font-black">→</span>
-            <img src={gift.receiverAvatar || `https://ui-avatars.com/api/?name=${gift.receiverName}`} className={`rounded-full object-cover border-2 border-secondary ${size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'}`} />
-            <span className="font-bold text-white drop-shadow">{gift.receiverName}</span>
-        </div>
-    );
-
-    // The gift itself, on its own scene layer (entrance, float, glow, shadow, shine). Composited on
-    // top of the Lottie effect when the gift has one, shown alone when it doesn't - one design both ways.
-    const renderIcon = (gift: GiftEvent) => (
-        <GiftHero
-            giftKey={gift.giftKey ?? gift.giftId}
-            giftIcon={gift.giftIcon}
-            giftName={gift.giftName}
-            comboCount={gift.comboCount}
-            category={gift.category}
-        />
-    );
+    // Bileşen sökülürken sarkan zamanlayıcı bırakma
+    useEffect(() => {
+        const bannerTimers = bannerTimersRef.current;
+        return () => {
+            Object.values(bannerTimers).forEach(clearTimeout);
+            if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
+        };
+    }, []);
 
     return (
         <>
-            {/* FULLSCREEN gift overlay - one at a time, rapid taps escalate the same instance */}
+            {/* Arka plan sahnesi - içeriğin ALTINDA (z-5), sohbeti ve kontrolleri kapatmaz */}
             <AnimatePresence>
-                {current && (
-                    <motion.div
-                        key={current.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 pointer-events-none bg-black/10"
+                {scene && (
+                    <div
+                        key={scene.id}
+                        className="fixed inset-0 z-[5] flex items-center justify-center pointer-events-none"
                     >
-                        {isVideoAnimation(current.animationUrl) ? (
-                            // Render edilmiş animasyon hediyenin TAMAMIDIR - üstüne ayrıca ikon
-                            // bindirmiyoruz, yoksa hediye iki kez görünür.
+                        {isVideoAnimation(scene.animationUrl) ? (
+                            <AlphaVideoPlayer
+                                url={scene.animationUrl!}
+                                className="w-full h-full"
+                                onComplete={handleSceneDone}
+                            />
+                        ) : scene.animationUrl ? (
                             <div className="relative w-full h-full max-w-md flex items-center justify-center">
-                                <AlphaVideoPlayer url={current.animationUrl!} className="w-full h-full" onComplete={handleFullscreenDone} />
-                                {(current.comboCount ?? 1) > 1 && (
-                                    <span className="absolute top-6 right-6 bg-secondary text-on-secondary text-2xl font-black px-3 py-0.5 rounded-full border-2 border-[#0b1326] shadow-[0_0_20px_rgba(255,198,64,0.8)]">
-                                        x{current.comboCount}
-                                    </span>
-                                )}
-                            </div>
-                        ) : current.animationUrl ? (
-                            // Vektör efekt arkada, hediyenin kendisi önde
-                            <div className="relative w-full h-full max-w-md flex items-center justify-center">
-                                <LottiePlayer url={current.animationUrl} className="absolute inset-0 w-full h-full" onComplete={handleFullscreenDone} />
-                                <div className="relative">{renderIcon(current)}</div>
+                                <LottiePlayer
+                                    url={scene.animationUrl}
+                                    className="absolute inset-0 w-full h-full"
+                                    onComplete={handleSceneDone}
+                                />
+                                <div className="relative">
+                                    <GiftHero
+                                        giftKey={scene.giftKey ?? scene.giftId}
+                                        giftIcon={scene.giftIcon}
+                                        giftName={scene.giftName}
+                                        comboCount={scene.comboCount}
+                                        category={scene.category}
+                                    />
+                                </div>
                             </div>
                         ) : (
-                            renderIcon(current)
+                            <GiftHero
+                                giftKey={scene.giftKey ?? scene.giftId}
+                                giftIcon={scene.giftIcon}
+                                giftName={scene.giftName}
+                                comboCount={scene.comboCount}
+                                category={scene.category}
+                            />
                         )}
-                        <div className="absolute bottom-28 left-0 right-0 flex justify-center px-4">
-                            <div className="bg-black/50 backdrop-blur-sm rounded-full px-4 py-2">
-                                {senderReceiverLine(current, 'lg')}
-                            </div>
-                        </div>
-                    </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
 
-            {/* TOAST gifts - stack in a corner, never block each other */}
-            <div className="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none items-end">
-                <AnimatePresence>
-                    {toasts.map(t => (
-                        <motion.div
-                            key={t.id}
-                            initial={{ opacity: 0, x: 50 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 50 }}
-                            className="bg-black/70 backdrop-blur-md rounded-full pl-2 pr-3 py-1.5 flex items-center gap-2 border border-white/10"
-                        >
-                            <span className="text-xl">{t.giftIcon || '🎁'}</span>
-                            {senderReceiverLine(t, 'sm')}
-                            {(t.comboCount ?? 1) > 1 && (
-                                <span className="text-[10px] bg-secondary text-on-secondary font-black px-1.5 py-0.5 rounded-full">x{t.comboCount}</span>
-                            )}
-                        </motion.div>
+            {/* Streak bantları - içeriğin ve panellerin üstünde ama tıklamayı geçirir */}
+            <div className="fixed left-3 top-[26%] z-[55] flex flex-col gap-3 pointer-events-none">
+                <AnimatePresence initial={false}>
+                    {banners.map(b => (
+                        <GiftStreakBanner
+                            key={b.id}
+                            senderName={b.sender?.name}
+                            senderAvatar={b.sender?.avatar}
+                            receiverName={b.receiverName}
+                            giftKey={b.giftKey ?? b.giftId}
+                            giftIcon={b.giftIcon}
+                            comboCount={b.comboCount}
+                        />
                     ))}
                 </AnimatePresence>
             </div>
