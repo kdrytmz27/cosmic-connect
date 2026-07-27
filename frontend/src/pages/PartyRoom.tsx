@@ -21,6 +21,9 @@ import { FamilyPanel } from '../components/party/family/FamilyPanel';
 import { buildGiftStreakKey } from '../utils/giftStreakKey';
 
 // TODO: Mikrofon/koltuk UI'ı şu an dekoratif - gerçek ses aktarımı (WebRTC/Agora/LiveKit) henüz entegre değil.
+// Aynı sunucu hatası bu süre içinde tekrar gelirse bildirim basılmaz
+const PARTY_ERROR_COOLDOWN_MS = 3000;
+
 export const PartyRoom: React.FC = () => {
     const { id: roomId } = useParams();
     const navigate = useNavigate();
@@ -51,6 +54,9 @@ export const PartyRoom: React.FC = () => {
     // Local Economy State
     const [localStardust, setLocalStardust] = useState<number>(0);
     const localGiftStreaksRef = useRef<Map<string, { count: number, timeout: ReturnType<typeof setTimeout> }>>(new Map());
+    // Hızlı combo'da sunucu aynı hatayı her dokunuş için geri yolluyor; aynı mesajı
+    // arka arkaya bildirim olarak basmak ekranı kaplıyordu.
+    const lastPartyErrorRef = useRef<{ message: string; at: number }>({ message: '', at: 0 });
 
     const isOwner = roomState?.ownerId === user?.id;
     const isModerator = roomState?.moderators?.includes(user?.id);
@@ -158,7 +164,15 @@ export const PartyRoom: React.FC = () => {
         };
 
         const handlePartyError = (data: { message?: string }) => {
-            if (data?.message) showToast(data.message, 'error');
+            if (data?.message) {
+                const now = Date.now();
+                const last = lastPartyErrorRef.current;
+                const isRepeat = last.message === data.message && now - last.at < PARTY_ERROR_COOLDOWN_MS;
+                if (!isRepeat) {
+                    lastPartyErrorRef.current = { message: data.message, at: now };
+                    showToast(data.message, 'error');
+                }
+            }
             // If we never got an initial state sync, the join itself failed - don't
             // leave the user staring at "Odaya bağlanılıyor..." forever.
             if (!hasSyncedRef.current) {
@@ -643,6 +657,17 @@ export const PartyRoom: React.FC = () => {
                                         showToast('Lütfen hediye göndermek için birini seçin', 'error');
                                         return;
                                     }
+
+                                    // Bakiye sunucudan yankı gelene kadar güncellenmezse, hızlı combo'da
+                                    // buton açık kalıyor ve combo ödenebilirin çok ötesine kaçıyor (sunucu
+                                    // reddederken sayaç tırmanmaya devam ediyordu). Maliyeti burada da
+                                    // düşüyoruz; sunucunun balanceUpdated yankısı gerçek değerle üzerine yazar.
+                                    const totalPrice = gift.price * quantity;
+                                    if (localStardust < totalPrice) {
+                                        showToast('Yetersiz Yıldız Tozu bakiyesi!', 'error');
+                                        return;
+                                    }
+                                    setLocalStardust(prev => prev - totalPrice);
 
                                     // Optimistic local animation - shows instantly instead of waiting on the
                                     // server round trip (remote DB), then merges seamlessly with the real
