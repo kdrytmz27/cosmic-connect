@@ -75,13 +75,35 @@ export const PartyRoom: React.FC = () => {
     const lastPartyErrorRef = useRef<{ message: string; at: number }>({ message: '', at: 0 });
     // Son hediye gönderiminin zamanı - gecikmiş sunucu bakiyesini uzlaştırmak için
     const lastGiftSendAtRef = useRef(0);
+    // Combo sırasında her yankıda kullanıcıyı yeniden çekmek hem gereksiz istek yığıyor
+    // hem de her cevap bayat bir bakiyeyle geri dönme ihtimali taşıyor; burst bitince bir kez çekiyoruz.
+    const refreshUserTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    /**
+     * Sunucudan gelen her bakiye buradan geçmeli.
+     *
+     * Sunucu MUTLAK değer yolluyor ve yankısı gecikebiliyor; hızlı combo'da sonraki
+     * dokunuşların iyimser düşüşü uygulanmışken eski bir yankı gelirse bakiyeyi yukarı
+     * zıplatıyor. Gönderim sürerken değer yalnızca aşağı çekilebilir, burst bitince
+     * sunucu değeri aynen kabul edilir.
+     */
+    const applyServerBalance = (value: number) => {
+        setLocalStardust(prev => {
+            const sendInFlight = Date.now() - lastGiftSendAtRef.current < BALANCE_RECONCILE_MS;
+            return sendInFlight ? Math.min(prev, value) : value;
+        });
+    };
 
     const isOwner = roomState?.ownerId === user?.id;
     const isModerator = roomState?.moderators?.includes(user?.id);
     const hasPower = isOwner || isModerator;
 
+    // Auth bağlamı da sunucu kaynağıdır (refreshUser cevabı buraya düşer), bu yüzden
+    // aynı uzlaştırmadan geçmesi gerekiyor - burayı korumasız bırakınca socket
+    // yankısındaki koruma anlamsız kalıyordu.
     useEffect(() => {
-        setLocalStardust(authStardustBalance || 0);
+        applyServerBalance(authStardustBalance || 0);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authStardustBalance]);
 
     const hasSyncedRef = React.useRef(false);
@@ -123,15 +145,10 @@ export const PartyRoom: React.FC = () => {
 
         const handleBalance = (data: { userId: string, stardustBalance: number, diamondBalance: number }) => {
             if (data.userId === user.id) {
-                setLocalStardust(prev => {
-                    // Sunucu MUTLAK bakiye yolluyor ve yankısı gecikebiliyor. Hızlı combo'da
-                    // sonraki dokunuşların iyimser düşüşü zaten uygulanmışken eski bir yankı
-                    // gelince bakiye yukarı zıplıyordu. Gönderim sürerken yalnızca aşağı
-                    // çekilmesine izin veriyoruz; burst bitince sunucu değeri aynen kabul edilir.
-                    const sendInFlight = Date.now() - lastGiftSendAtRef.current < BALANCE_RECONCILE_MS;
-                    return sendInFlight ? Math.min(prev, data.stardustBalance) : data.stardustBalance;
-                });
-                refreshUser();
+                applyServerBalance(data.stardustBalance);
+                // Combo boyunca her yankıda çekmek yerine, ortalık durulunca bir kez
+                if (refreshUserTimerRef.current) clearTimeout(refreshUserTimerRef.current);
+                refreshUserTimerRef.current = setTimeout(() => refreshUser(), BALANCE_RECONCILE_MS);
             }
         };
 
@@ -225,6 +242,7 @@ export const PartyRoom: React.FC = () => {
             socket.off('partyError', handlePartyError);
             socket.off('partyRoomLocked', handleRoomLocked);
             socket.off('partyBanned', handleBanned);
+            if (refreshUserTimerRef.current) clearTimeout(refreshUserTimerRef.current);
         };
     }, [socket, roomId, user?.id]);
 
