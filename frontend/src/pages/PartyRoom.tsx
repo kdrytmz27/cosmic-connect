@@ -21,8 +21,24 @@ import { FamilyPanel } from '../components/party/family/FamilyPanel';
 import { buildGiftStreakKey } from '../utils/giftStreakKey';
 
 // TODO: Mikrofon/koltuk UI'ı şu an dekoratif - gerçek ses aktarımı (WebRTC/Agora/LiveKit) henüz entegre değil.
-// Aynı sunucu hatası bu süre içinde tekrar gelirse bildirim basılmaz
+// Aynı hata bu süre içinde tekrar gelirse bildirim basılmaz
 const PARTY_ERROR_COOLDOWN_MS = 3000;
+// Son gönderimden bu kadar süre geçmeden gelen sunucu bakiyesi, iyimser düşüşleri geri almasın
+const BALANCE_RECONCILE_MS = 2000;
+
+type ErrorThrottleRef = { current: { message: string; at: number } };
+
+/**
+ * Hızlı combo'da hem sunucu hem istemci aynı "yetersiz bakiye" uyarısını her dokunuş için
+ * üretiyor. İkisi de buradan geçer ki ekran üst üste bildirimle dolmasın.
+ */
+const notifyOnce = (ref: ErrorThrottleRef, showToast: (m: string, t: 'error') => void, message: string) => {
+    const now = Date.now();
+    const last = ref.current;
+    if (last.message === message && now - last.at < PARTY_ERROR_COOLDOWN_MS) return;
+    ref.current = { message, at: now };
+    showToast(message, 'error');
+};
 
 export const PartyRoom: React.FC = () => {
     const { id: roomId } = useParams();
@@ -57,6 +73,8 @@ export const PartyRoom: React.FC = () => {
     // Hızlı combo'da sunucu aynı hatayı her dokunuş için geri yolluyor; aynı mesajı
     // arka arkaya bildirim olarak basmak ekranı kaplıyordu.
     const lastPartyErrorRef = useRef<{ message: string; at: number }>({ message: '', at: 0 });
+    // Son hediye gönderiminin zamanı - gecikmiş sunucu bakiyesini uzlaştırmak için
+    const lastGiftSendAtRef = useRef(0);
 
     const isOwner = roomState?.ownerId === user?.id;
     const isModerator = roomState?.moderators?.includes(user?.id);
@@ -105,7 +123,14 @@ export const PartyRoom: React.FC = () => {
 
         const handleBalance = (data: { userId: string, stardustBalance: number, diamondBalance: number }) => {
             if (data.userId === user.id) {
-                setLocalStardust(data.stardustBalance);
+                setLocalStardust(prev => {
+                    // Sunucu MUTLAK bakiye yolluyor ve yankısı gecikebiliyor. Hızlı combo'da
+                    // sonraki dokunuşların iyimser düşüşü zaten uygulanmışken eski bir yankı
+                    // gelince bakiye yukarı zıplıyordu. Gönderim sürerken yalnızca aşağı
+                    // çekilmesine izin veriyoruz; burst bitince sunucu değeri aynen kabul edilir.
+                    const sendInFlight = Date.now() - lastGiftSendAtRef.current < BALANCE_RECONCILE_MS;
+                    return sendInFlight ? Math.min(prev, data.stardustBalance) : data.stardustBalance;
+                });
                 refreshUser();
             }
         };
@@ -164,15 +189,7 @@ export const PartyRoom: React.FC = () => {
         };
 
         const handlePartyError = (data: { message?: string }) => {
-            if (data?.message) {
-                const now = Date.now();
-                const last = lastPartyErrorRef.current;
-                const isRepeat = last.message === data.message && now - last.at < PARTY_ERROR_COOLDOWN_MS;
-                if (!isRepeat) {
-                    lastPartyErrorRef.current = { message: data.message, at: now };
-                    showToast(data.message, 'error');
-                }
-            }
+            if (data?.message) notifyOnce(lastPartyErrorRef, showToast, data.message);
             // If we never got an initial state sync, the join itself failed - don't
             // leave the user staring at "Odaya bağlanılıyor..." forever.
             if (!hasSyncedRef.current) {
@@ -664,10 +681,11 @@ export const PartyRoom: React.FC = () => {
                                     // düşüyoruz; sunucunun balanceUpdated yankısı gerçek değerle üzerine yazar.
                                     const totalPrice = gift.price * quantity;
                                     if (localStardust < totalPrice) {
-                                        showToast('Yetersiz Yıldız Tozu bakiyesi!', 'error');
+                                        notifyOnce(lastPartyErrorRef, showToast, 'Yetersiz Yıldız Tozu bakiyesi!');
                                         return;
                                     }
                                     setLocalStardust(prev => prev - totalPrice);
+                                    lastGiftSendAtRef.current = Date.now();
 
                                     // Optimistic local animation - shows instantly instead of waiting on the
                                     // server round trip (remote DB), then merges seamlessly with the real
