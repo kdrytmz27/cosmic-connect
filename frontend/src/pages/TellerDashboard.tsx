@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import VoiceRecorder from '../components/common/VoiceRecorder';
 import { BrandLoader } from '../components/BrandLoader';
+import { PayoutPanel } from '../components/teller/PayoutPanel';
 
 interface FortuneRequest {
     id: string;
@@ -49,6 +50,7 @@ const TellerDashboard = () => {
     
     const [fortunes, setFortunes] = useState<FortuneRequest[]>([]);
     const [stats, setStats] = useState<TellerStats>({ totalReadings: 0, rating: 0, earnedStardust: 0 });
+    const [diamondBalance, setDiamondBalance] = useState(0);
     const [loading, setLoading] = useState(true);
     const [selectedFortune, setSelectedFortune] = useState<FortuneRequest | null>(null);
     const [interpretation, setInterpretation] = useState('');
@@ -70,6 +72,8 @@ const TellerDashboard = () => {
             
             setFortunes(fortunesRes.data);
             
+            setDiamondBalance(profileRes.data.profile?.diamondBalance || 0);
+
             const tellerProfile = profileRes.data.profile?.fortuneTellerProfile;
             if (tellerProfile) {
                 setStats({
@@ -180,6 +184,11 @@ const TellerDashboard = () => {
                     <div className="font-headline-lg text-headline-lg text-on-surface font-bold text-tertiary">{stats.earnedStardust}</div>
                     <div className="font-label-sm text-label-sm text-on-surface-variant mt-1">Kazanılan Toz</div>
                 </div>
+            </section>
+
+            {/* Kazanç çekme */}
+            <section className="mb-section-gap">
+                <PayoutPanel diamondBalance={diamondBalance} onBalanceChange={setDiamondBalance} />
             </section>
 
             {/* Pending Fortunes */}

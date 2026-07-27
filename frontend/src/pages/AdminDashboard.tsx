@@ -6,7 +6,7 @@ import { ShieldAlert, Users, CheckCircle, XCircle, TrendingUp, Activity, DollarS
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type TabType = 'OVERVIEW' | 'APPLICATIONS' | 'USERS' | 'TELLERS' | 'REPORTS' | 'FINANCE';
+type TabType = 'OVERVIEW' | 'APPLICATIONS' | 'USERS' | 'TELLERS' | 'REPORTS' | 'FINANCE' | 'PAYOUTS';
 
 export default function AdminDashboard() {
     const { token } = useAuth();
@@ -24,17 +24,22 @@ export default function AdminDashboard() {
         totalUsers: 0, premiumUsers: 0, totalAppointments: 0, pendingTellers: 0, totalStardustCirculation: 0
     });
     const [charts, setCharts] = useState<any>({ dailyRegistrations: [], topTellers: [] });
+    const [payouts, setPayouts] = useState<any[]>([]);
+    // Hangi talebin işlendiğini takip eder - çift tıklamada iki istek gitmesin
+    const [processingPayoutId, setProcessingPayoutId] = useState<string | null>(null);
 
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            const [usersRes, appsRes, statsRes, reportsRes, financeRes] = await Promise.all([
+            const [usersRes, appsRes, statsRes, reportsRes, financeRes, payoutsRes] = await Promise.all([
                 axios.get(`${BACKEND_URL}/api/admin/users?limit=100`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${BACKEND_URL}/api/admin/tellers/applications`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${BACKEND_URL}/api/admin/stats`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${BACKEND_URL}/api/admin/reports?limit=50`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${BACKEND_URL}/api/admin/financial-reports`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`${BACKEND_URL}/api/admin/financial-reports`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${BACKEND_URL}/api/admin/payouts?status=PENDING`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
+            setPayouts(payoutsRes.data.payouts || []);
             
             setUsers(usersRes.data.users || []);
             setApplications(appsRes.data || []);
@@ -51,6 +56,31 @@ export default function AdminDashboard() {
             showToast('Admin verileri güncellenirken hata oluştu.', 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    /**
+     * Ödeme talebini sonuçlandırır.
+     *
+     * COMPLETE yalnızca kayıt tutar - para banka üzerinden elle gönderiliyor.
+     * REJECT ise emanetteki elması falcıya iade ediyor (sunucu tarafında).
+     */
+    const handleProcessPayout = async (id: string, action: 'COMPLETE' | 'REJECT') => {
+        if (processingPayoutId) return;
+        setProcessingPayoutId(id);
+        try {
+            await axios.patch(
+                `${BACKEND_URL}/api/admin/payouts/${id}`,
+                { action },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            // Liste yalnızca bekleyenleri gösteriyor, sonuçlanan satır düşer
+            setPayouts(prev => prev.filter(p => p.id !== id));
+            showToast(action === 'COMPLETE' ? 'Ödeme tamamlandı olarak işaretlendi.' : 'Talep reddedildi, tutar iade edildi.', 'success');
+        } catch (error: any) {
+            showToast(error?.response?.data?.error || 'Ödeme talebi işlenemedi.', 'error');
+        } finally {
+            setProcessingPayoutId(null);
         }
     };
 
@@ -112,7 +142,7 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="flex flex-wrap bg-surface-container border border-white/10 p-1 rounded-3xl w-full md:rounded-full">
-                    {(['OVERVIEW', 'USERS', 'TELLERS', 'APPLICATIONS', 'REPORTS', 'FINANCE'] as TabType[]).map(tab => (
+                    {(['OVERVIEW', 'USERS', 'TELLERS', 'APPLICATIONS', 'REPORTS', 'FINANCE', 'PAYOUTS'] as TabType[]).map(tab => (
                         <button 
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -122,7 +152,9 @@ export default function AdminDashboard() {
                              tab === 'USERS' ? 'Kullanıcılar' : 
                              tab === 'TELLERS' ? 'Falcılar' : 
                              tab === 'APPLICATIONS' ? 'Başvurular' : 
-                             tab === 'REPORTS' ? 'Raporlar' : 'Finans'}
+                             tab === 'REPORTS' ? 'Raporlar' :
+                             tab === 'FINANCE' ? 'Finans' :
+                             `Ödemeler${payouts.length ? ` (${payouts.length})` : ''}`}
                         </button>
                     ))}
                 </div>
@@ -360,6 +392,62 @@ export default function AdminDashboard() {
                                     <p className="text-4xl font-bold text-tertiary">✨ {financeData?.totalCirculation || 0}</p>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'PAYOUTS' && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <h2 className="font-headline-md text-white">Bekleyen Ödeme Talepleri</h2>
+                                <span className="font-label-sm text-on-surface-variant">
+                                    Para banka üzerinden elle gönderilir; burası yalnızca kayıt tutar.
+                                </span>
+                            </div>
+
+                            {payouts.length === 0 ? (
+                                <p className="text-on-surface-variant text-center py-10">Bekleyen ödeme talebi yok.</p>
+                            ) : (
+                                payouts.map(p => (
+                                    <div key={p.id} className="bg-surface-container border border-white/10 rounded-2xl p-5 flex flex-col md:flex-row md:items-center gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-white font-bold">{p.teller?.user?.name || 'İsimsiz falcı'}</span>
+                                                <span className="text-xs text-on-surface-variant">{p.teller?.user?.email}</span>
+                                            </div>
+                                            <div className="font-mono text-sm text-on-surface-variant mt-1 break-all">
+                                                {String(p.iban || '').replace(/(.{4})/g, '$1 ').trim()}
+                                            </div>
+                                            <div className="text-xs text-on-surface-variant mt-1">
+                                                Talep: {new Date(p.createdAt).toLocaleString('tr-TR')} · Kalan bakiye: {(p.teller?.user?.diamondBalance ?? 0).toLocaleString('tr-TR')} elmas
+                                            </div>
+                                        </div>
+
+                                        <div className="text-right shrink-0">
+                                            <div className="font-headline-md text-emerald-400 font-bold">
+                                                {Number(p.amount).toLocaleString('tr-TR')}
+                                            </div>
+                                            <div className="font-label-sm text-on-surface-variant">elmas</div>
+                                        </div>
+
+                                        <div className="flex gap-2 shrink-0">
+                                            <button
+                                                onClick={() => handleProcessPayout(p.id, 'COMPLETE')}
+                                                disabled={processingPayoutId !== null}
+                                                className="flex items-center gap-1 px-4 py-2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors disabled:opacity-40"
+                                            >
+                                                <Check size={16} /> Ödendi
+                                            </button>
+                                            <button
+                                                onClick={() => handleProcessPayout(p.id, 'REJECT')}
+                                                disabled={processingPayoutId !== null}
+                                                className="flex items-center gap-1 px-4 py-2 rounded-full bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+                                            >
+                                                <XCircle size={16} /> Reddet
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     )}
                 </motion.div>

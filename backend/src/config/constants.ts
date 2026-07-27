@@ -24,5 +24,10 @@ export const CONSTANTS = {
     DURATIONS: {
         MATCH_EXPIRY_MS: 160 * 1000, // 160 seconds
         MATCH_EXTENSION_HOURS: 24
+    },
+    PAYOUT: {
+        // Çekilebilir bakiye elmastır (User.diamondBalance)
+        MIN_AMOUNT: 10000, // Elmas - altında talep oluşturulamaz
+        MAX_AMOUNT: 1000000 // Tek talepte üst sınır, elle inceleme gerektiren tutarlar için emniyet
     }
 };

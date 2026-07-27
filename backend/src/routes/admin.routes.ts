@@ -5,6 +5,7 @@ import { getAllUsers, updateUser, getTellerApplications, approveRejectTeller, ge
 import { getFinancialReports } from '../controllers/admin.finance.controller';
 import { getAllReports, updateReportStatus } from '../controllers/admin.report.controller';
 import { getAllPartyGifts, createPartyGift, updatePartyGift, deletePartyGift } from '../controllers/admin.partyGift.controller';
+import { listPayouts, processPayout } from '../controllers/admin.payout.controller';
 
 const router = Router();
 
@@ -27,6 +28,10 @@ router.get('/reports', getAllReports);
 router.patch('/reports/:id/status', updateReportStatus);
 
 // Party gift catalog
+// Falcı ödeme talepleri
+router.get('/payouts', listPayouts);
+router.patch('/payouts/:id', processPayout);
+
 router.get('/party-gifts', getAllPartyGifts);
 router.post('/party-gifts', createPartyGift);
 router.patch('/party-gifts/:id', updatePartyGift);
