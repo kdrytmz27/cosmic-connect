@@ -267,20 +267,30 @@ export const getTransactions = async (req: Request, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) throw new UnauthorizedError();
 
-    const transactions = await prisma.gift.findMany({
-        where: {
-            OR: [
-                { senderId: userId },
-                { receiverId: userId }
-            ]
-        },
-        include: {
-            sender: { select: { name: true, avatar: true } },
-            receiver: { select: { name: true, avatar: true } }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50
-    });
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const where = {
+        OR: [
+            { senderId: userId },
+            { receiverId: userId }
+        ]
+    };
+
+    const [transactions, total] = await Promise.all([
+        prisma.gift.findMany({
+            where,
+            include: {
+                sender: { select: { name: true, avatar: true } },
+                receiver: { select: { name: true, avatar: true } }
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit
+        }),
+        prisma.gift.count({ where })
+    ]);
 
     const formattedTransactions: any[] = [];
     
@@ -328,5 +338,14 @@ export const getTransactions = async (req: Request, res: Response) => {
         }
     });
 
-    res.json({ transactions: formattedTransactions });
+    // hasMore ham hediye kaydı sayısına bakar, biçimlenmiş satır sayısına değil:
+    // kendine gönderilen hediye iki satıra açıldığı için formatlanmış liste
+    // limitten uzun olabiliyor ve sayfalamayı yanıltırdı.
+    res.json({
+        transactions: formattedTransactions,
+        page,
+        limit,
+        total,
+        hasMore: skip + transactions.length < total
+    });
 };

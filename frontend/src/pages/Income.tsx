@@ -4,6 +4,10 @@ import { ChevronLeft, Diamond, Sparkles, ArrowRight, ArrowDown, ArrowUp, Activit
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 
+// Özet görünümde gösterilen işlem sayısı
+const RECENT_COUNT = 5;
+const PAGE_SIZE = 20;
+
 interface IncomeProps {
     /**
      * Profil sayfası bunu modal olarak açıyor ve kapatmayı kendisi yönetiyor.
@@ -21,6 +25,11 @@ export const Income: React.FC<IncomeProps> = ({ onClose }) => {
     const [user, setUser] = useState<any>(authUser);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    // Özet görünümde yalnızca son birkaçı, "Tümü"nde sayfa sayfa hepsi gösterilir
+    const [showAll, setShowAll] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     useEffect(() => {
         const fetchBalance = async () => {
@@ -30,8 +39,9 @@ export const Income: React.FC<IncomeProps> = ({ onClose }) => {
                 const profileData = data.profile || data;
                 setUser(profileData);
 
-                const txRes = await api.get('/user/transactions');
+                const txRes = await api.get('/user/transactions', { params: { page: 1, limit: PAGE_SIZE } });
                 setTransactions(txRes.data.transactions || []);
+                setHasMore(!!txRes.data.hasMore);
             } catch (error) {
                 console.error("Bakiye veya İşlemler çekilemedi", error);
             } finally {
@@ -40,6 +50,26 @@ export const Income: React.FC<IncomeProps> = ({ onClose }) => {
         };
         fetchBalance();
     }, []);
+
+    const loadMore = async () => {
+        if (loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        try {
+            const next = page + 1;
+            const { data } = await api.get('/user/transactions', { params: { page: next, limit: PAGE_SIZE } });
+            setTransactions(prev => [...prev, ...(data.transactions || [])]);
+            setPage(next);
+            setHasMore(!!data.hasMore);
+        } catch (error) {
+            console.error("Daha fazla işlem çekilemedi", error);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    const visible = showAll ? transactions : transactions.slice(0, RECENT_COUNT);
+    // Gizlenen satır ya da sunucuda başka sayfa varsa "Tümü" anlamlı
+    const canShowAll = transactions.length > RECENT_COUNT || hasMore;
 
     return (
         <div className="fixed inset-0 bg-[#0b1326] z-[9999] flex flex-col font-body-md text-white overflow-y-auto">
@@ -96,17 +126,28 @@ export const Income: React.FC<IncomeProps> = ({ onClose }) => {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-bold flex items-center gap-2">
                             <Activity size={20} className="text-[#ddb8ff]" />
-                            Son İşlemler
+                            {showAll ? 'Tüm İşlemler' : 'Son İşlemler'}
                         </h2>
-                        {/* TODO: Tüm işlemler sayfası/modalı henüz yok. */}
-                        <button className="text-sm text-[#3cddc7] font-semibold flex items-center">
-                            Tümü <ArrowRight size={14} className="ml-1" />
-                        </button>
+                        {showAll ? (
+                            <button
+                                onClick={() => setShowAll(false)}
+                                className="text-sm text-[#3cddc7] font-semibold flex items-center"
+                            >
+                                <ChevronLeft size={14} className="mr-1" /> Özet
+                            </button>
+                        ) : canShowAll && (
+                            <button
+                                onClick={() => setShowAll(true)}
+                                className="text-sm text-[#3cddc7] font-semibold flex items-center"
+                            >
+                                Tümü <ArrowRight size={14} className="ml-1" />
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex flex-col gap-3">
-                        {transactions.length > 0 ? (
-                            transactions.map((tx) => (
+                        {visible.length > 0 ? (
+                            visible.map((tx) => (
                                 <div key={tx.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -134,8 +175,18 @@ export const Income: React.FC<IncomeProps> = ({ onClose }) => {
                         ) : (
                             <div className="text-center py-8 text-white/40 text-sm">
                                 <Activity size={32} className="mx-auto mb-3 opacity-20" />
-                                <p>Henüz bir işlem geçmişiniz bulunmuyor.</p>
+                                <p>{loading ? 'İşlemler yükleniyor...' : 'Henüz bir işlem geçmişiniz bulunmuyor.'}</p>
                             </div>
+                        )}
+
+                        {showAll && hasMore && (
+                            <button
+                                onClick={loadMore}
+                                disabled={loadingMore}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 text-sm font-semibold text-white/80 hover:bg-white/10 transition-colors disabled:opacity-50"
+                            >
+                                {loadingMore ? 'Yükleniyor...' : 'Daha fazla yükle'}
+                            </button>
                         )}
                     </div>
                 </div>
