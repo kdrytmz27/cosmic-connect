@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Diamond, Sparkles, ArrowRight, ArrowDown, ArrowUp, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 
 interface IncomeProps {
-    onClose: () => void;
+    /**
+     * Profil sayfası bunu modal olarak açıyor ve kapatmayı kendisi yönetiyor.
+     * /income rotasından açıldığında ise prop gelmiyor; o durumda geri butonu
+     * tarayıcı geçmişine dönüyor. Zorunlu bırakılınca rotadan açılan sayfada
+     * buton hiçbir şey yapmıyordu.
+     */
+    onClose?: () => void;
 }
 
 export const Income: React.FC<IncomeProps> = ({ onClose }) => {
+    const navigate = useNavigate();
+    const handleClose = onClose ?? (() => navigate(-1));
     const { user: authUser } = useAuth();
     const [user, setUser] = useState<any>(authUser);
     const [transactions, setTransactions] = useState<any[]>([]);
@@ -36,7 +45,7 @@ export const Income: React.FC<IncomeProps> = ({ onClose }) => {
         <div className="fixed inset-0 bg-[#0b1326] z-[9999] flex flex-col font-body-md text-white overflow-y-auto">
             {/* Header */}
             <header className="flex items-center px-4 py-4 pt-safe sticky top-0 bg-[#0b1326]/90 backdrop-blur-md z-10 border-b border-white/5">
-                <button onClick={onClose} className="p-2 -ml-2 text-white/70 hover:text-white">
+                <button onClick={handleClose} className="p-2 -ml-2 text-white/70 hover:text-white">
                     <ChevronLeft size={24} />
                 </button>
                 <h1 className="flex-1 text-center font-display-md text-lg font-bold pr-8">Kozmik Gelir</h1>

@@ -83,11 +83,12 @@ const Leaderboard = () => {
                             {podiumOrder.map((leader, index) => {
                                 // Default ordering when we have 3 items: [2nd, 1st, 3rd]
                                 // If fewer than 3, we just display them.
-                                let isFirst = false, isSecond = false, isThird = false;
+                                // Üçüncülük ayrı bir bayrak istemiyor - birinci ve ikinci
+                                // değilse stiller zaten bronza düşüyor.
+                                let isFirst = false, isSecond = false;
                                 if (podiumOrder.length === 3) {
                                     isFirst = index === 1;
                                     isSecond = index === 0;
-                                    isThird = index === 2;
                                 } else {
                                     isFirst = index === 0;
                                     isSecond = index === 1;
